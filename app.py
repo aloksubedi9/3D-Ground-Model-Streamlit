@@ -6,20 +6,31 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import Polygon, Rectangle
 import streamlit as st
 import os
-from io import BytesIO
 
 # Set PyVista to off-screen rendering for Streamlit
 pv.global_theme.jupyter_backend = 'static'  # Use static rendering for Streamlit
 
-# Load data
-# For Streamlit, we'll assume the input.xlsx file is in the same directory as app.py
-# In a real deployment, you might want to upload the file via Streamlit
-try:
-    df = pd.read_excel('input.xlsx', sheet_name='Sheet 1')
-    df = df[df['Include in 3D'].str.strip().str.lower() == 'yes'].reset_index(drop=True)
-except FileNotFoundError:
-    st.error("Please upload an 'input.xlsx' file with the correct format.")
-    st.stop()
+# File uploader for input.xlsx
+uploaded_file = st.file_uploader("Upload your input.xlsx file", type=["xlsx"])
+if uploaded_file is not None:
+    # Load data from the uploaded file
+    try:
+        df = pd.read_excel(uploaded_file, sheet_name='Sheet 1')
+        df = df[df['Include in 3D'].str.strip().str.lower() == 'yes'].reset_index(drop=True)
+    except Exception as e:
+        st.error(f"Error reading the Excel file: {e}")
+        st.stop()
+else:
+    # Try to load from the local directory as a fallback
+    try:
+        df = pd.read_excel('input.xlsx', sheet_name='Sheet 1')
+        df = df[df['Include in 3D'].str.strip().str.lower() == 'yes'].reset_index(drop=True)
+    except FileNotFoundError:
+        st.error("No 'input.xlsx' file found in the directory. Please upload the file using the uploader above.")
+        st.stop()
+    except Exception as e:
+        st.error(f"Error reading the local input.xlsx file: {e}")
+        st.stop()
 
 # Scale factor for vertical exaggeration
 z_scale = 5
