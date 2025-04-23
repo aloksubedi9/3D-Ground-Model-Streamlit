@@ -1,3 +1,8 @@
+numpy
+pandas
+scipy
+matplotlib
 streamlit
-pyvista
+openpyxl
+ipython
 plotly
