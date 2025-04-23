@@ -18,12 +18,13 @@ pv.global_theme.jupyter_backend = 'static'
 pv.set_jupyter_backend('static')
 pv.global_theme.show_scalar_bar = False  # Disable scalar bar for cleaner output
 
-# Start a virtual frame buffer only on Linux (e.g., Streamlit Cloud)
+# Configure headless rendering for Linux (Streamlit Cloud)
 if platform.system() == "Linux":
     try:
-        pv.start_xvfb()
+        # Instead of pv.start_xvfb(), set PyVista to use OSMesa for headless rendering
+        pv.global_theme.use_osmesa = True
     except Exception as e:
-        st.warning(f"Failed to start xvfb on Linux: {e}")
+        st.warning(f"Failed to configure headless rendering on Linux: {e}")
 
 # File uploader for input.xlsx
 uploaded_file = st.file_uploader("Upload your input.xlsx file", type=["xlsx"])
