@@ -190,7 +190,7 @@ def plot_3d_visualization(view_mode):
                 zaxis_showticklabels=False,
                 bgcolor='black'
             ),
-            width=1200,
+            width=800,
             height=800,
             margin=dict(l=0, r=0, b=0, t=50),
             showlegend=True,
