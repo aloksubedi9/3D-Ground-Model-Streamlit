@@ -12,6 +12,10 @@ import platform  # To check the operating system
 # Set PyVista to off-screen rendering for Streamlit
 pv.global_theme.jupyter_backend = 'static'  # Use static rendering for Streamlit
 pv.set_jupyter_backend('static')  # Explicitly set backend for static rendering
+pv.global_theme.show_scalar_bar = False  # Disable scalar bar for cleaner output
+
+# Debug: Confirm PyVista backend settings
+st.write(f"PyVista Jupyter Backend: {pv.global_theme.jupyter_backend}")
 
 # Start a virtual frame buffer only on Linux (e.g., Streamlit Cloud)
 if platform.system() == "Linux":
