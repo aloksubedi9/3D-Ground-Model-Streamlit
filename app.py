@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import Polygon, Rectangle
 import streamlit as st
 import plotly.graph_objects as go
+import seaborn as sns  # Import seaborn for styling
 
 # File uploader for input.xlsx
 uploaded_file = st.file_uploader("Upload your input.xlsx file", type=["xlsx"])
@@ -249,8 +250,10 @@ def plot_2d_cross_section(selected_bhids):
     layer3_depths = section_df['Layer3 Depth'].values * z_scale
     actual_ground_levels = section_df['Ground Level'].values
 
+    # Apply Seaborn styling
+    sns.set_theme(style="whitegrid")  # Use Seaborn's whitegrid style for a modern look
+
     # Create the 2D cross-section plot with improved styling
-    plt.style.use('seaborn')  # Use a modern style for better aesthetics
     fig, ax = plt.subplots(figsize=(12, 6), facecolor='white')
 
     # Track plotted layer types for the legend
@@ -295,9 +298,13 @@ def plot_2d_cross_section(selected_bhids):
                 next_x = distances[i + 1]
                 next_gl = ground_levels[i + 1]
                 next_l1 = layer1_depths[i + 1] if pd.notna(layer1_depths[i + 1]) else next_gl
-                polygon = Polygon([
-                    (x, gl), (x, l1), (next_x, next_l1), (next_x, next_gl)
-                ], facecolor=color, edgecolor='black', linewidth=1, alpha=0.7)
+                polygon = Polygon(
+                    [(x, gl), (x, l1), (next_x, next_l1), (next_x, next_gl)],
+                    facecolor=color,
+                    edgecolor='black',
+                    linewidth=1,
+                    alpha=0.7
+                )
                 ax.add_patch(polygon)
                 if layer_type not in plotted_layer_types:
                     plotted_layer_types.add(layer_type)
@@ -311,9 +318,13 @@ def plot_2d_cross_section(selected_bhids):
                 next_x = distances[i + 1]
                 next_l1 = layer1_depths[i + 1] if pd.notna(layer1_depths[i + 1]) else ground_levels[i + 1]
                 next_l2 = layer2_depths[i + 1] if pd.notna(layer2_depths[i + 1]) else next_l1
-                polygon = Polygon([
-                    (x, l1), (x, l2), (next_x, next_l2), (next_x, next_l1)
-                ], facecolor=color, edgecolor='black', linewidth=1, alpha=0.7)
+                polygon = Polygon(
+                    [(x, l1), (x, l2), (next_x, next_l2), (next_x, next_l1)],
+                    facecolor=color,
+                    edgecolor='black',
+                    linewidth=1,
+                    alpha=0.7
+                )
                 ax.add_patch(polygon)
                 if layer_type not in plotted_layer_types:
                     plotted_layer_types.add(layer_type)
@@ -327,9 +338,13 @@ def plot_2d_cross_section(selected_bhids):
                 next_x = distances[i + 1]
                 next_l2 = layer2_depths[i + 1] if pd.notna(layer2_depths[i + 1]) else layer1_depths[i + 1]
                 next_l3 = layer3_depths[i + 1] if pd.notna(layer3_depths[i + 1]) else next_l2
-                polygon = Polygon([
-                    (x, l2), (x, l3), (next_x, next_l3), (next_x, next_l2)
-                ], facecolor=color, edgecolor='black', linewidth=1, alpha=0.7)
+                polygon = Polygon(
+                    [(x, l2), (x, l3), (next_x, next_l3), (next_x, next_l2)],
+                    facecolor=color,
+                    edgecolor='black',
+                    linewidth=1,
+                    alpha=0.7
+                )
                 ax.add_patch(polygon)
                 if layer_type not in plotted_layer_types:
                     plotted_layer_types.add(layer_type)
