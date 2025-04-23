@@ -14,14 +14,10 @@ pv.global_theme.jupyter_backend = 'static'  # Use static rendering for Streamlit
 pv.set_jupyter_backend('static')  # Explicitly set backend for static rendering
 pv.global_theme.show_scalar_bar = False  # Disable scalar bar for cleaner output
 
-# Debug: Confirm PyVista backend settings
-st.write(f"PyVista Jupyter Backend: {pv.global_theme.jupyter_backend}")
-
 # Start a virtual frame buffer only on Linux (e.g., Streamlit Cloud)
 if platform.system() == "Linux":
     try:
         pv.start_xvfb()
-        st.write("Started xvfb for headless rendering.")
     except Exception as e:
         st.warning(f"Failed to start xvfb on Linux: {e}")
 
@@ -60,9 +56,6 @@ all_layers = pd.concat([
 ])
 unique_types = all_layers['Type'].dropna().unique()
 
-# Debug: Display unique layer types
-st.write("Unique Layer Types Found:", unique_types)
-
 # Assign color map
 color_map = {
     layer: color for layer, color in zip(
@@ -74,9 +67,6 @@ color_map = {
 # Prepare borehole data
 coords = df[['Easting', 'Northing']].values
 ground_levels = df['Ground Level'].values
-
-# Debug: Display a sample of the dataframe
-st.write("Sample of DataFrame:", df.head())
 
 # Apply vertical exaggeration for plotting
 ground_levels_exag = ground_levels * z_scale
@@ -111,10 +101,6 @@ for i in range(len(df)):
         layer_type = df.at[i, 'Layer3 Type']
         layers_data_by_type[layer_type].append((x, y, l3))
 
-# Debug: Display the number of points for each layer type
-for layer_type, pts in layers_data_by_type.items():
-    st.write(f"Number of points for {layer_type}: {len(pts)}")
-
 # Create interpolation grid
 grid_x, grid_y = np.meshgrid(
     np.linspace(x_vals.min(), x_vals.max(), 60),
@@ -135,14 +121,10 @@ for layer_type, pts in layers_data_by_type.items():
         surface = pv.PolyData(points).delaunay_2d().smooth(n_iter=50)
         surfaces[layer_type] = surface
 
-# Debug: Display which surfaces were created
-st.write("Surfaces Created:", list(surfaces.keys()))
-
 # Function to plot 3D visualization and return an image or HTML
 def plot_3d_visualization(view_mode):
     try:
         # Start plotter for 3D visualization
-        st.write(f"Generating 3D visualization for view mode {view_mode}...")
         plotter = pv.Plotter(off_screen=True)  # Off-screen rendering for Streamlit
         plotter.set_background('black')
 
@@ -151,19 +133,15 @@ def plot_3d_visualization(view_mode):
 
         # Plot surfaces (if applicable)
         if view_mode in [2, 3]:  # Modes 2 and 3 include surfaces
-            st.write("Plotting surfaces...")
             for layer_type, mesh in surfaces.items():
                 if layer_type == 'Ground Level':
-                    st.write("Adding Ground Surface")
                     plotter.add_mesh(mesh, color='#228B22', label='Ground Surface', smooth_shading=True)
                 else:
                     color = color_map.get(layer_type, 'grey')
-                    st.write(f"Adding {layer_type} Surface with color {color}")
                     plotter.add_mesh(mesh, color=color, label=f"{layer_type} Surface", smooth_shading=True)
 
         # Plot boreholes (if applicable)
         if view_mode in [1, 2]:  # Modes 1 and 2 include borelogs
-            st.write("Plotting boreholes...")
             for i in range(len(df)):
                 x, y = x_vals[i], y_vals[i]
                 z0 = df.at[i, 'Ground Level'] * z_scale
@@ -173,9 +151,6 @@ def plot_3d_visualization(view_mode):
                 points = [(x, y, z0)]
                 colors = []
 
-                # Debug: Log borehole details
-                st.write(f"Borehole {BHID}: Ground Level (exaggerated) = {z0}, Actual Elevation = {actual_elev}")
-
                 for layer_idx in [1, 2, 3]:
                     depth_col = f'Layer{layer_idx} Depth'
                     type_col = f'Layer{layer_idx} Type'
@@ -184,9 +159,6 @@ def plot_3d_visualization(view_mode):
                         points.append((x, y, z))
                         layer_type = df.at[i, type_col]
                         colors.append(color_map.get(layer_type, 'grey'))
-                        st.write(f"  Layer {layer_idx}: Depth (exaggerated) = {z}, Type = {layer_type}, Color = {colors[-1]}")
-                    else:
-                        st.write(f"  Layer {layer_idx}: Depth is NaN")
 
                 # Draw segments with labels for the legend
                 for j in range(len(points) - 1):
@@ -196,27 +168,23 @@ def plot_3d_visualization(view_mode):
                     if label:
                         plotted_layer_types.add(layer_type)
                     plotter.add_mesh(line.tube(radius=2), color=colors[j], label=label)
-                    st.write(f"  Added segment from {points[j]} to {points[j + 1]} with color {colors[j]}")
 
                 # Add borehole ID with actual elevation
                 label_text = f"{BHID}\nElev: {actual_elev:.2f}"
                 plotter.add_point_labels([points[0]], [label_text], point_size=10, font_size=12, text_color='black', shape_opacity=1.0)
-                st.write(f"Added label: {label_text}")
 
         # Add legend and title
         plotter.add_legend()
         plotter.add_title('3D Ground Model with Borehole Stratigraphy', font_size=14)
 
-        # First, generate a static image to ensure rendering works
+        # Generate a static image
         image_path = f"3d_model_option_{view_mode}_fallback.png"
-        st.write(f"Saving static image to {image_path}...")
         plotter.screenshot(image_path)
 
         # Try to export the visualization as an HTML file for interactivity
         html_content = None
         try:
             html_path = f"3d_model_option_{view_mode}.html"
-            st.write(f"Exporting 3D model to {html_path}...")
             plotter.export_html(html_path)
             # Read the HTML content
             with open(html_path, 'r', encoding='utf-8') as f:
