@@ -6,12 +6,16 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import Polygon, Rectangle
 import streamlit as st
 import streamlit.components.v1 as components
+import panel as pn
 import os
 import platform  # To check the operating system
 
-# Set PyVista to off-screen rendering for Streamlit
-pv.global_theme.jupyter_backend = 'static'  # Use static rendering for Streamlit
-pv.set_jupyter_backend('static')  # Explicitly set backend for static rendering
+# Initialize Panel extension
+pn.extension('vtk')  # Use VTK backend for Panel to render PyVista plots
+
+# Set PyVista to off-screen rendering for Streamlit (for static fallback if needed)
+pv.global_theme.jupyter_backend = 'static'
+pv.set_jupyter_backend('static')
 pv.global_theme.show_scalar_bar = False  # Disable scalar bar for cleaner output
 
 # Start a virtual frame buffer only on Linux (e.g., Streamlit Cloud)
@@ -121,11 +125,11 @@ for layer_type, pts in layers_data_by_type.items():
         surface = pv.PolyData(points).delaunay_2d().smooth(n_iter=50)
         surfaces[layer_type] = surface
 
-# Function to plot 3D visualization and return an image or HTML
+# Function to plot 3D visualization and return an interactive Panel object
 def plot_3d_visualization(view_mode):
     try:
         # Start plotter for 3D visualization
-        plotter = pv.Plotter(off_screen=True)  # Off-screen rendering for Streamlit
+        plotter = pv.Plotter(notebook=True)  # Use notebook=True for Panel integration
         plotter.set_background('black')
 
         # Track plotted layer types to avoid duplicate legend entries
@@ -177,24 +181,14 @@ def plot_3d_visualization(view_mode):
         plotter.add_legend()
         plotter.add_title('3D Ground Model with Borehole Stratigraphy', font_size=14)
 
-        # Generate a static image
+        # Generate a static image as a fallback
         image_path = f"3d_model_option_{view_mode}_fallback.png"
         plotter.screenshot(image_path)
 
-        # Try to export the visualization as an HTML file for interactivity
-        html_content = None
-        try:
-            html_path = f"3d_model_option_{view_mode}.html"
-            plotter.export_html(html_path)
-            # Read the HTML content
-            with open(html_path, 'r', encoding='utf-8') as f:
-                html_content = f.read()
-            # Remove the temporary HTML file to clean up
-            os.remove(html_path)
-        except Exception as e:
-            st.warning(f"Failed to export HTML: {e}. Displaying static image instead.")
+        # Use Panel to create an interactive visualization
+        panel_obj = pn.panel(plotter.ren_win, height=600, width=800)
 
-        return html_content, image_path
+        return panel_obj, image_path
 
     except Exception as e:
         st.error(f"Error generating 3D visualization: {e}")
@@ -343,28 +337,28 @@ col1, col2, col3 = st.columns(3)
 
 with col1:
     if st.button("1) Only Borelogs"):
-        html_content, image_path = plot_3d_visualization(1)
-        if html_content:
-            # Embed the interactive HTML in Streamlit
-            components.html(html_content, height=600, width=800)
+        panel_obj, image_path = plot_3d_visualization(1)
+        if panel_obj:
+            # Embed the interactive Panel visualization in Streamlit
+            components.html(panel_obj._repr_html_(), height=600, width=800)
         if image_path:
-            st.image(image_path, caption="Option 1: Only Borelogs")
+            st.image(image_path, caption="Option 1: Only Borelogs (Static Fallback)")
 
 with col2:
     if st.button("2) Borelogs with Surfaces"):
-        html_content, image_path = plot_3d_visualization(2)
-        if html_content:
-            components.html(html_content, height=600, width=800)
+        panel_obj, image_path = plot_3d_visualization(2)
+        if panel_obj:
+            components.html(panel_obj._repr_html_(), height=600, width=800)
         if image_path:
-            st.image(image_path, caption="Option 2: Borelogs with Surfaces")
+            st.image(image_path, caption="Option 2: Borelogs with Surfaces (Static Fallback)")
 
 with col3:
     if st.button("3) Only Surfaces"):
-        html_content, image_path = plot_3d_visualization(3)
-        if html_content:
-            components.html(html_content, height=600, width=800)
+        panel_obj, image_path = plot_3d_visualization(3)
+        if panel_obj:
+            components.html(panel_obj._repr_html_(), height=600, width=800)
         if image_path:
-            st.image(image_path, caption="Option 3: Only Surfaces")
+            st.image(image_path, caption="Option 3: Only Surfaces (Static Fallback)")
 
 # 2D Cross-Section with Checklist
 st.header("2D Cross-Section")
