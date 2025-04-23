@@ -6,7 +6,4 @@ matplotlib
 streamlit
 openpyxl
 ipython
-trame
-trame-client
-trame-server
-trame-vtk
+panel
