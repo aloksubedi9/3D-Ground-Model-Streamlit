@@ -177,7 +177,7 @@ def plot_3d_visualization(view_mode):
                     showlegend=False
                 ))
 
-        # Update layout for better visualization
+        # Update layout for better visualization with maximized dimensions
         fig.update_layout(
             title='3D Ground Model with Borehole Stratigraphy',
             scene=dict(
@@ -186,8 +186,9 @@ def plot_3d_visualization(view_mode):
                 zaxis_title='Elevation (exaggerated)',
                 bgcolor='black'
             ),
-            width=800,
-            height=600,
+            # Increase width and height to maximize the interactive window
+            width=1200,  # Larger width for modern screens
+            height=800,  # Larger height for better visibility
             margin=dict(l=0, r=0, b=0, t=50),
             showlegend=True,
             legend=dict(
@@ -377,5 +378,3 @@ if st.button("Generate 2D Cross-Section"):
         fig = plot_2d_cross_section(selected_bhids)
         if fig:
             st.pyplot(fig)
-    else:
-        st.error("Please select at least 2 boreholes for the cross-section.")
