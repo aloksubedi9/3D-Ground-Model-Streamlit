@@ -181,14 +181,16 @@ def plot_3d_visualization(view_mode):
         fig.update_layout(
             title='3D Ground Model with Borehole Stratigraphy',
             scene=dict(
-                xaxis_title='Easting',
-                yaxis_title='Northing',
-                zaxis_title='Elevation (exaggerated)',
+                xaxis_title='',  # Remove X-axis label
+                yaxis_title='',  # Remove Y-axis label
+                zaxis_title='',  # Remove Z-axis label
+                xaxis_showticklabels=False,  # Optional: hide tick labels if desired
+                yaxis_showticklabels=False,
+                zaxis_showticklabels=False,
                 bgcolor='black'
             ),
-            # Increase width and height to maximize the interactive window
-            width=1200,  # Larger width for modern screens
-            height=800,  # Larger height for better visibility
+            width=1200,
+            height=800,
             margin=dict(l=0, r=0, b=0, t=50),
             showlegend=True,
             legend=dict(
@@ -197,7 +199,17 @@ def plot_3d_visualization(view_mode):
                 traceorder="normal",
                 font=dict(size=12),
                 bgcolor="rgba(255, 255, 255, 0.5)"
+            ),
+            # Enable fullscreen mode automatically
+            scene_camera=dict(
+                eye=dict(x=1.5, y=1.5, z=0.5)  # Adjust camera for better initial view
             )
+        )
+
+        # Add a fullscreen button to the modebar and trigger it automatically
+        fig.update_layout(
+            modebar_add=["togglefullscreen"],
+            modebar_activecolor="#00BFFF"
         )
 
         return fig
@@ -206,7 +218,7 @@ def plot_3d_visualization(view_mode):
         st.error(f"Error generating 3D visualization: {e}")
         return None
 
-# Function to plot 2D cross-section (unchanged)
+# Function to plot 2D cross-section with improved styling
 def plot_2d_cross_section(selected_bhids):
     # Validate input
     if len(selected_bhids) < 2:
@@ -237,14 +249,15 @@ def plot_2d_cross_section(selected_bhids):
     layer3_depths = section_df['Layer3 Depth'].values * z_scale
     actual_ground_levels = section_df['Ground Level'].values
 
-    # Create the 2D cross-section plot
-    fig, ax = plt.subplots(figsize=(10, 6))
+    # Create the 2D cross-section plot with improved styling
+    plt.style.use('seaborn')  # Use a modern style for better aesthetics
+    fig, ax = plt.subplots(figsize=(12, 6), facecolor='white')
 
     # Track plotted layer types for the legend
     plotted_layer_types = set()
     legend_patches = []
 
-    # Plot each layer as a filled polygon
+    # Plot each layer as a filled polygon with improved colors and styling
     for i in range(len(section_df)):
         x = distances[i]
         gl = ground_levels[i]
@@ -261,15 +274,16 @@ def plot_2d_cross_section(selected_bhids):
         if pd.notna(layer3_depths[i]):
             deepest_depth = l3
 
-        # Represent borehole as a rectangle
-        rect_width = 1
+        # Represent borehole as a rectangle with better styling
+        rect_width = 1.5  # Slightly wider rectangles
         rect = Rectangle(
             (x - rect_width/2, deepest_depth),
             rect_width,
             gl - deepest_depth,
-            facecolor='grey',
+            facecolor='#D3D3D3',  # Light gray for boreholes
             edgecolor='black',
-            alpha=0.5
+            linewidth=1.5,
+            alpha=0.8
         )
         ax.add_patch(rect)
 
@@ -283,11 +297,11 @@ def plot_2d_cross_section(selected_bhids):
                 next_l1 = layer1_depths[i + 1] if pd.notna(layer1_depths[i + 1]) else next_gl
                 polygon = Polygon([
                     (x, gl), (x, l1), (next_x, next_l1), (next_x, next_gl)
-                ], facecolor=color, edgecolor='black', alpha=0.6)
+                ], facecolor=color, edgecolor='black', linewidth=1, alpha=0.7)
                 ax.add_patch(polygon)
                 if layer_type not in plotted_layer_types:
                     plotted_layer_types.add(layer_type)
-                    legend_patches.append(Polygon([[0, 0]], facecolor=color, edgecolor='black', alpha=0.6, label=layer_type))
+                    legend_patches.append(Polygon([[0, 0]], facecolor=color, edgecolor='black', alpha=0.7, label=layer_type))
 
         # Layer 1 to Layer 2
         if pd.notna(layer2_depths[i]):
@@ -299,11 +313,11 @@ def plot_2d_cross_section(selected_bhids):
                 next_l2 = layer2_depths[i + 1] if pd.notna(layer2_depths[i + 1]) else next_l1
                 polygon = Polygon([
                     (x, l1), (x, l2), (next_x, next_l2), (next_x, next_l1)
-                ], facecolor=color, edgecolor='black', alpha=0.6)
+                ], facecolor=color, edgecolor='black', linewidth=1, alpha=0.7)
                 ax.add_patch(polygon)
                 if layer_type not in plotted_layer_types:
                     plotted_layer_types.add(layer_type)
-                    legend_patches.append(Polygon([[0, 0]], facecolor=color, edgecolor='black', alpha=0.6, label=layer_type))
+                    legend_patches.append(Polygon([[0, 0]], facecolor=color, edgecolor='black', alpha=0.7, label=layer_type))
 
         # Layer 2 to Layer 3
         if pd.notna(layer3_depths[i]):
@@ -315,26 +329,39 @@ def plot_2d_cross_section(selected_bhids):
                 next_l3 = layer3_depths[i + 1] if pd.notna(layer3_depths[i + 1]) else next_l2
                 polygon = Polygon([
                     (x, l2), (x, l3), (next_x, next_l3), (next_x, next_l2)
-                ], facecolor=color, edgecolor='black', alpha=0.6)
+                ], facecolor=color, edgecolor='black', linewidth=1, alpha=0.7)
                 ax.add_patch(polygon)
                 if layer_type not in plotted_layer_types:
                     plotted_layer_types.add(layer_type)
-                    legend_patches.append(Polygon([[0, 0]], facecolor=color, edgecolor='black', alpha=0.6, label=layer_type))
+                    legend_patches.append(Polygon([[0, 0]], facecolor=color, edgecolor='black', alpha=0.7, label=layer_type))
 
-    # Plot the ground surface line
-    ax.plot(distances, ground_levels, 'k-', label='Ground Surface')
+    # Plot the ground surface line with improved styling
+    ax.plot(distances, ground_levels, 'k-', label='Ground Surface', linewidth=2)
 
-    # Add borehole labels with actual elevation
+    # Add borehole labels with actual elevation with better styling
     for i, (x, gl) in enumerate(zip(distances, ground_levels)):
         bhid = section_df.iloc[i]['BHID']
         actual_elev = section_df.iloc[i]['Ground Level']
-        ax.text(x, gl - 3, f"{bhid}\nElev: {actual_elev:.2f}", ha='center', va='bottom')
+        ax.text(x, gl + 5, f"{bhid}\nElev: {actual_elev:.2f}", ha='center', va='bottom', fontsize=10, fontweight='bold', color='black')
 
-    # Set labels and title
-    ax.set_xlabel('Distance Along Section (units)')
-    ax.yaxis.set_visible(False)
-    ax.set_title('2D Cross-Section of Selected Boreholes')
-    ax.legend(handles=[plt.Line2D([0], [0], color='black', label='Ground Surface')] + legend_patches)
+    # Set labels and title with improved styling
+    ax.set_xlabel('Distance Along Section (units)', fontsize=12, fontweight='bold')
+    ax.set_title('2D Cross-Section of Selected Boreholes', fontsize=14, fontweight='bold', pad=20)
+
+    # Show Y-axis with depth labels (exaggerated depths)
+    ax.set_ylabel('Depth (exaggerated)', fontsize=12, fontweight='bold')
+    ax.invert_yaxis()  # Invert Y-axis to show depth increasing downward
+    ax.grid(True, linestyle='--', alpha=0.7)  # Add gridlines for better readability
+
+    # Customize the legend
+    ax.legend(handles=[plt.Line2D([0], [0], color='black', linewidth=2, label='Ground Surface')] + legend_patches, 
+              loc='upper right', fontsize=10, frameon=True, edgecolor='black')
+
+    # Customize the plot background and spines
+    ax.set_facecolor('#F5F5F5')  # Light gray background
+    for spine in ax.spines.values():
+        spine.set_linewidth(1.5)
+        spine.set_color('black')
 
     # Display the plot in Streamlit
     plt.tight_layout()
@@ -351,19 +378,44 @@ with col1:
     if st.button("1) Only Borelogs"):
         fig = plot_3d_visualization(1)
         if fig:
-            st.plotly_chart(fig, use_container_width=True)
+            # Display the chart and trigger fullscreen automatically
+            chart = st.plotly_chart(fig, use_container_width=True)
+            st.markdown(
+                """
+                <script>
+                document.querySelector('iframe').contentWindow.document.querySelector('.modebar-btn[data-title="Toggle Fullscreen"]').click();
+                </script>
+                """,
+                unsafe_allow_html=True
+            )
 
 with col2:
     if st.button("2) Borelogs with Surfaces"):
         fig = plot_3d_visualization(2)
         if fig:
-            st.plotly_chart(fig, use_container_width=True)
+            chart = st.plotly_chart(fig, use_container_width=True)
+            st.markdown(
+                """
+                <script>
+                document.querySelector('iframe').contentWindow.document.querySelector('.modebar-btn[data-title="Toggle Fullscreen"]').click();
+                </script>
+                """,
+                unsafe_allow_html=True
+            )
 
 with col3:
     if st.button("3) Only Surfaces"):
         fig = plot_3d_visualization(3)
         if fig:
-            st.plotly_chart(fig, use_container_width=True)
+            chart = st.plotly_chart(fig, use_container_width=True)
+            st.markdown(
+                """
+                <script>
+                document.querySelector('iframe').contentWindow.document.querySelector('.modebar-btn[data-title="Toggle Fullscreen"]').click();
+                </script>
+                """,
+                unsafe_allow_html=True
+            )
 
 # 2D Cross-Section with Checklist
 st.header("2D Cross-Section")
@@ -378,3 +430,5 @@ if st.button("Generate 2D Cross-Section"):
         fig = plot_2d_cross_section(selected_bhids)
         if fig:
             st.pyplot(fig)
+    else:
+        st.error("Please select at least 2 boreholes for the cross-section.")
