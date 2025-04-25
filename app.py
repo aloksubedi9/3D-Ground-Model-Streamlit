@@ -5,7 +5,9 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import Polygon, Rectangle
 import streamlit as st
 import plotly.graph_objects as go
-import seaborn as sns  # Import seaborn for styling
+
+# Set Streamlit page to wide mode
+st.set_page_config(layout="wide")
 
 # File uploader for input.xlsx
 uploaded_file = st.file_uploader("Upload your input.xlsx file", type=["xlsx"])
@@ -31,8 +33,9 @@ else:
         st.error(f"Error reading the local input.xlsx file: {e}")
         st.stop()
 
-# Scale factor for vertical exaggeration
-z_scale = 5
+# Sidebar for visualization settings
+st.sidebar.header("Visualization Settings")
+z_scale = st.sidebar.slider("Vertical Exaggeration", min_value=1, max_value=10, value=5, step=1)
 
 # Get unique layer types to assign colors
 all_layers = pd.concat([
@@ -190,7 +193,7 @@ def plot_3d_visualization(view_mode):
                 zaxis_showticklabels=False,
                 bgcolor='black'
             ),
-            width=800,
+            width=1200,
             height=800,
             margin=dict(l=0, r=0, b=0, t=50),
             showlegend=True,
@@ -201,13 +204,12 @@ def plot_3d_visualization(view_mode):
                 font=dict(size=12),
                 bgcolor="rgba(255, 255, 255, 0.5)"
             ),
-            # Enable fullscreen mode automatically
             scene_camera=dict(
                 eye=dict(x=1.5, y=1.5, z=0.5)  # Adjust camera for better initial view
             )
         )
 
-        # Add a fullscreen button to the modebar and trigger it automatically
+        # Add a fullscreen button to the modebar
         fig.update_layout(
             modebar_add=["togglefullscreen"],
             modebar_activecolor="#00BFFF"
@@ -219,7 +221,7 @@ def plot_3d_visualization(view_mode):
         st.error(f"Error generating 3D visualization: {e}")
         return None
 
-# Function to plot 2D cross-section with improved styling
+# Function to plot 2D cross-section with Plotly
 def plot_2d_cross_section(selected_bhids):
     # Validate input
     if len(selected_bhids) < 2:
@@ -250,17 +252,13 @@ def plot_2d_cross_section(selected_bhids):
     layer3_depths = section_df['Layer3 Depth'].values * z_scale
     actual_ground_levels = section_df['Ground Level'].values
 
-    # Apply Seaborn styling
-    sns.set_theme(style="whitegrid")  # Use Seaborn's whitegrid style for a modern look
-
-    # Create the 2D cross-section plot with improved styling
-    fig, ax = plt.subplots(figsize=(12, 6), facecolor='white')
+    # Create Plotly figure
+    fig = go.Figure()
 
     # Track plotted layer types for the legend
     plotted_layer_types = set()
-    legend_patches = []
 
-    # Plot each layer as a filled polygon with improved colors and styling
+    # Plot each layer as a filled shape
     for i in range(len(section_df)):
         x = distances[i]
         gl = ground_levels[i]
@@ -277,18 +275,17 @@ def plot_2d_cross_section(selected_bhids):
         if pd.notna(layer3_depths[i]):
             deepest_depth = l3
 
-        # Represent borehole as a rectangle with better styling
-        rect_width = 1.5  # Slightly wider rectangles
-        rect = Rectangle(
-            (x - rect_width/2, deepest_depth),
-            rect_width,
-            gl - deepest_depth,
-            facecolor='#D3D3D3',  # Light gray for boreholes
-            edgecolor='black',
-            linewidth=1.5,
-            alpha=0.8
+        # Add borehole as a vertical rectangle (using Plotly shapes)
+        rect_width = 1.5
+        fig.add_shape(
+            type="rect",
+            x0=x - rect_width/2, x1=x + rect_width/2,
+            y0=deepest_depth, y1=gl,
+            fillcolor="#D3D3D3",
+            line=dict(color="black", width=1.5),
+            opacity=0.8,
+            layer="below"
         )
-        ax.add_patch(rect)
 
         # Ground to Layer 1
         if pd.notna(layer1_depths[i]):
@@ -298,17 +295,18 @@ def plot_2d_cross_section(selected_bhids):
                 next_x = distances[i + 1]
                 next_gl = ground_levels[i + 1]
                 next_l1 = layer1_depths[i + 1] if pd.notna(layer1_depths[i + 1]) else next_gl
-                polygon = Polygon(
-                    [(x, gl), (x, l1), (next_x, next_l1), (next_x, next_gl)],
-                    facecolor=color,
-                    edgecolor='black',
-                    linewidth=1,
-                    alpha=0.7
-                )
-                ax.add_patch(polygon)
-                if layer_type not in plotted_layer_types:
-                    plotted_layer_types.add(layer_type)
-                    legend_patches.append(Polygon([[0, 0]], facecolor=color, edgecolor='black', alpha=0.7, label=layer_type))
+                # Add filled shape for the layer
+                fig.add_trace(go.Scatter(
+                    x=[x, x, next_x, next_x, x],
+                    y=[gl, l1, next_l1, next_gl, gl],
+                    fill="toself",
+                    fillcolor=color,
+                    line=dict(color="black", width=1),
+                    opacity=0.7,
+                    name=layer_type if layer_type not in plotted_layer_types else None,
+                    showlegend=layer_type not in plotted_layer_types
+                ))
+                plotted_layer_types.add(layer_type)
 
         # Layer 1 to Layer 2
         if pd.notna(layer2_depths[i]):
@@ -318,17 +316,17 @@ def plot_2d_cross_section(selected_bhids):
                 next_x = distances[i + 1]
                 next_l1 = layer1_depths[i + 1] if pd.notna(layer1_depths[i + 1]) else ground_levels[i + 1]
                 next_l2 = layer2_depths[i + 1] if pd.notna(layer2_depths[i + 1]) else next_l1
-                polygon = Polygon(
-                    [(x, l1), (x, l2), (next_x, next_l2), (next_x, next_l1)],
-                    facecolor=color,
-                    edgecolor='black',
-                    linewidth=1,
-                    alpha=0.7
-                )
-                ax.add_patch(polygon)
-                if layer_type not in plotted_layer_types:
-                    plotted_layer_types.add(layer_type)
-                    legend_patches.append(Polygon([[0, 0]], facecolor=color, edgecolor='black', alpha=0.7, label=layer_type))
+                fig.add_trace(go.Scatter(
+                    x=[x, x, next_x, next_x, x],
+                    y=[l1, l2, next_l2, next_l1, l1],
+                    fill="toself",
+                    fillcolor=color,
+                    line=dict(color="black", width=1),
+                    opacity=0.7,
+                    name=layer_type if layer_type not in plotted_layer_types else None,
+                    showlegend=layer_type not in plotted_layer_types
+                ))
+                plotted_layer_types.add(layer_type)
 
         # Layer 2 to Layer 3
         if pd.notna(layer3_depths[i]):
@@ -338,48 +336,55 @@ def plot_2d_cross_section(selected_bhids):
                 next_x = distances[i + 1]
                 next_l2 = layer2_depths[i + 1] if pd.notna(layer2_depths[i + 1]) else layer1_depths[i + 1]
                 next_l3 = layer3_depths[i + 1] if pd.notna(layer3_depths[i + 1]) else next_l2
-                polygon = Polygon(
-                    [(x, l2), (x, l3), (next_x, next_l3), (next_x, next_l2)],
-                    facecolor=color,
-                    edgecolor='black',
-                    linewidth=1,
-                    alpha=0.7
-                )
-                ax.add_patch(polygon)
-                if layer_type not in plotted_layer_types:
-                    plotted_layer_types.add(layer_type)
-                    legend_patches.append(Polygon([[0, 0]], facecolor=color, edgecolor='black', alpha=0.7, label=layer_type))
+                fig.add_trace(go.Scatter(
+                    x=[x, x, next_x, next_x, x],
+                    y=[l2, l3, next_l3, next_l2, l2],
+                    fill="toself",
+                    fillcolor=color,
+                    line=dict(color="black", width=1),
+                    opacity=0.7,
+                    name=layer_type if layer_type not in plotted_layer_types else None,
+                    showlegend=layer_type not in plotted_layer_types
+                ))
+                plotted_layer_types.add(layer_type)
 
-    # Plot the ground surface line with improved styling
-    ax.plot(distances, ground_levels, 'k-', label='Ground Surface', linewidth=2)
-
-    # Add borehole labels with actual elevation with better styling
-    for i, (x, gl) in enumerate(zip(distances, ground_levels)):
+        # Add borehole label with actual elevation
         bhid = section_df.iloc[i]['BHID']
         actual_elev = section_df.iloc[i]['Ground Level']
-        ax.text(x, gl + 5, f"{bhid}\nElev: {actual_elev:.2f}", ha='center', va='bottom', fontsize=10, fontweight='bold', color='black')
+        fig.add_trace(go.Scatter(
+            x=[x], y=[gl],
+            mode="text",
+            text=[f"{bhid}<br>Elev: {actual_elev:.2f}"],
+            textposition="top center",
+            textfont=dict(size=10, color="black"),
+            showlegend=False
+        ))
 
-    # Set labels and title with improved styling
-    ax.set_xlabel('Distance Along Section (units)', fontsize=12, fontweight='bold')
-    ax.set_title('2D Cross-Section of Selected Boreholes', fontsize=14, fontweight='bold', pad=20)
+    # Plot the ground surface line
+    fig.add_trace(go.Scatter(
+        x=distances, y=ground_levels,
+        mode="lines",
+        line=dict(color="black", width=2),
+        name="Ground Surface"
+    ))
 
-    # Show Y-axis with depth labels (exaggerated depths)
-    ax.set_ylabel('Depth (exaggerated)', fontsize=12, fontweight='bold')
-    ax.invert_yaxis()  # Invert Y-axis to show depth increasing downward
-    ax.grid(True, linestyle='--', alpha=0.7)  # Add gridlines for better readability
+    # Update layout for better visualization
+    fig.update_layout(
+        title="2D Cross-Section of Selected Boreholes",
+        xaxis_title="Distance Along Section (units)",
+        yaxis_title="Depth (exaggerated)",
+        yaxis_autorange="reversed",  # Invert Y-axis to show depth increasing downward
+        showlegend=True,
+        legend=dict(x=0, y=1, bgcolor="rgba(255, 255, 255, 0.5)"),
+        width=1200,  # Match 3D plot width
+        height=600,  # Slightly shorter than 3D plot
+        margin=dict(l=50, r=50, b=50, t=50),
+        plot_bgcolor="#F5F5F5",  # Light gray background
+        paper_bgcolor="white",
+        xaxis=dict(gridcolor="rgba(0,0,0,0.2)", zeroline=False),
+        yaxis=dict(gridcolor="rgba(0,0,0,0.2)", zeroline=False)
+    )
 
-    # Customize the legend
-    ax.legend(handles=[plt.Line2D([0], [0], color='black', linewidth=2, label='Ground Surface')] + legend_patches, 
-              loc='upper right', fontsize=10, frameon=True, edgecolor='black')
-
-    # Customize the plot background and spines
-    ax.set_facecolor('#F5F5F5')  # Light gray background
-    for spine in ax.spines.values():
-        spine.set_linewidth(1.5)
-        spine.set_color('black')
-
-    # Display the plot in Streamlit
-    plt.tight_layout()
     return fig
 
 # Streamlit App
@@ -393,7 +398,6 @@ with col1:
     if st.button("1) Only Borelogs"):
         fig = plot_3d_visualization(1)
         if fig:
-            # Display the chart and trigger fullscreen automatically
             chart = st.plotly_chart(fig, use_container_width=True)
             st.markdown(
                 """
@@ -444,6 +448,6 @@ if st.button("Generate 2D Cross-Section"):
     if len(selected_bhids) >= 2:
         fig = plot_2d_cross_section(selected_bhids)
         if fig:
-            st.pyplot(fig)
+            st.plotly_chart(fig, use_container_width=True)
     else:
         st.error("Please select at least 2 boreholes for the cross-section.")
