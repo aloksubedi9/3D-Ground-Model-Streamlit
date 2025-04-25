@@ -437,7 +437,7 @@ with col3:
             )
 
 # 2D Cross-Section with Checklist
-st.header("2D Cross-Section")
+st.header("2D Cross Section")
 st.subheader("Select Boreholes for 2D Cross-Section (at least 2)")
 
 # Checklist for BHIDs
