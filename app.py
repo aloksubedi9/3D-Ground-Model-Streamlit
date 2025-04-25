@@ -373,14 +373,13 @@ def plot_2d_cross_section(selected_bhids):
         title="2D Cross-Section of Selected Boreholes",
         xaxis_title="Distance Along Section (units)",
         yaxis_title="Depth (exaggerated)",
-        yaxis_autorange="reversed",  # Invert Y-axis to show depth increasing downward
         showlegend=True,
         legend=dict(x=0, y=1, bgcolor="rgba(255, 255, 255, 0.5)"),
         width=1200,  # Match 3D plot width
         height=600,  # Slightly shorter than 3D plot
         margin=dict(l=50, r=50, b=50, t=50),
         plot_bgcolor="#F5F5F5",  # Light gray background
-        paper_bgcolor="white",
+        paper_bgcolor="black",
         xaxis=dict(gridcolor="rgba(0,0,0,0.2)", zeroline=False),
         yaxis=dict(gridcolor="rgba(0,0,0,0.2)", zeroline=False)
     )
