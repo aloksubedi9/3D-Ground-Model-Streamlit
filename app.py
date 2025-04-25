@@ -49,12 +49,9 @@ unique_types = all_layers['Type'].dropna().unique()
 color_map = {
     layer: color for layer, color in zip(
         unique_types,
-        ['#8B0000', '#00008B', '#FFA500', '#800080', '#708090', '#006400', '#00BFFF']
+        ['#8B0000', '#00008B', '#FFA500', '#800080', '#708090', '#006400', '#00BFFF']  # extend if needed
     )
 }
-
-# Determine the most common Layer 1 type for ground surface color
-most_common_layer1_type = df['Layer1 Type'].mode()[0] if not df['Layer1 Type'].isna().all() else None
 
 # Prepare borehole data
 coords = df[['Easting', 'Northing']].values
@@ -124,12 +121,10 @@ def plot_3d_visualization(view_mode):
         if view_mode in [2, 3]:  # Modes 2 and 3 include surfaces
             for layer_type, z_grid in surfaces.items():
                 if layer_type == 'Ground Level':
-                    # Use the same color as the most common Layer 1 type
-                    ground_color = color_map.get(most_common_layer1_type, '#228B22')  # Fallback to green if no Layer 1 type
                     fig.add_trace(go.Surface(
                         x=grid_x, y=grid_y, z=z_grid,
-                        colorscale=[[0, ground_color], [1, ground_color]],
-                        name=f'Ground Surface ({most_common_layer1_type})',
+                        colorscale=[[0, '#228B22'], [1, '#228B22']],
+                        name='Ground Surface',
                         showscale=False
                     ))
                 else:
@@ -190,10 +185,10 @@ def plot_3d_visualization(view_mode):
         fig.update_layout(
             title='3D Ground Model with Borehole Stratigraphy',
             scene=dict(
-                xaxis_title='',
-                yaxis_title='',
-                zaxis_title='',
-                xaxis_showticklabels=False,
+                xaxis_title='',  # Remove X-axis label
+                yaxis_title='',  # Remove Y-axis label
+                zaxis_title='',  # Remove Z-axis label
+                xaxis_showticklabels=False,  # Optional: hide tick labels if desired
                 yaxis_showticklabels=False,
                 zaxis_showticklabels=False,
                 bgcolor='black'
@@ -210,7 +205,7 @@ def plot_3d_visualization(view_mode):
                 bgcolor="rgba(255, 255, 255, 0.5)"
             ),
             scene_camera=dict(
-                eye=dict(x=1.5, y=1.5, z=0.5)
+                eye=dict(x=1.5, y=1.5, z=0.5)  # Adjust camera for better initial view
             )
         )
 
@@ -361,7 +356,7 @@ def plot_2d_cross_section(selected_bhids):
             mode="text",
             text=[f"{bhid}<br>Elev: {actual_elev:.2f}"],
             textposition="top center",
-            textfont=dict(size=10, color="black"),
+            textfont=dict(size=15, color="black"),
             showlegend=False
         ))
 
@@ -378,21 +373,20 @@ def plot_2d_cross_section(selected_bhids):
         title="2D Cross-Section of Selected Boreholes",
         xaxis_title="Distance Along Section (units)",
         yaxis_title="Depth (exaggerated)",
-        yaxis_autorange="reversed",
         showlegend=True,
         legend=dict(
             x=0,
             y=1,
-            bgcolor="rgba(50, 50, 50, 0.9)",
-            font=dict(size=14, color="white"),
-            bordercolor="black",
+            bgcolor="rgba(50, 50, 50, 0.9)",  # Darker semi-transparent background
+            font=dict(size=14, color="white"),  # Larger font size, white text for contrast
+            bordercolor="black",  # Add a border for better definition
             borderwidth=1
         ),
-        width=1200,
-        height=600,
+        width=1200,  # Match 3D plot width
+        height=600,  # Slightly shorter than 3D plot
         margin=dict(l=50, r=50, b=50, t=50),
-        plot_bgcolor="#F5F5F5",
-        paper_bgcolor="white",
+        plot_bgcolor="#F5F5F5",  # Light gray background
+        paper_bgcolor="black",
         xaxis=dict(gridcolor="rgba(0,0,0,0.2)", zeroline=False),
         yaxis=dict(gridcolor="rgba(0,0,0,0.2)", zeroline=False)
     )
@@ -449,7 +443,7 @@ with col3:
             )
 
 # 2D Cross-Section with Checklist
-st.header("2D Cross-Section")
+st.header("2D Cross Section")
 st.subheader("Select Boreholes for 2D Cross-Section (at least 2)")
 
 # Checklist for BHIDs
