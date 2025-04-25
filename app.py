@@ -377,8 +377,10 @@ def plot_2d_cross_section(selected_bhids):
         legend=dict(
             x=0,
             y=1,
-            bgcolor="rgba(255, 255, 255, 0.5)",
-            font=dict(size=30)  # Increase legend font size
+            bgcolor="rgba(50, 50, 50, 0.9)",  # Darker semi-transparent background
+            font=dict(size=14, color="white"),  # Larger font size, white text for contrast
+            bordercolor="black",  # Add a border for better definition
+            borderwidth=1
         ),
         width=1200,  # Match 3D plot width
         height=600,  # Slightly shorter than 3D plot
