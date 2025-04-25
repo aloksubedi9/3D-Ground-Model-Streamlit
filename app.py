@@ -356,7 +356,7 @@ def plot_2d_cross_section(selected_bhids):
             mode="text",
             text=[f"{bhid}<br>Elev: {actual_elev:.2f}"],
             textposition="top center",
-            textfont=dict(size=10, color="black"),
+            textfont=dict(size=15, color="black"),
             showlegend=False
         ))
 
