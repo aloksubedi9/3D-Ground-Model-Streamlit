@@ -228,7 +228,7 @@ def plot_3d_visualization(view_mode, selected_surfaces=None):
                     mode='markers+text',
                     text=[f"{BHID}<br>Elev: {actual_elev:.2f}"],
                     textposition="top center",
-                    marker=dict(size=5, color='black'),
+                    marker=dict(size=8, color='black'),
                     showlegend=False
                 ))
 
