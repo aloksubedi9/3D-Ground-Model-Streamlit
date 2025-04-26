@@ -215,7 +215,7 @@ def plot_3d_visualization(view_mode, selected_surfaces=None):
                         y=y_seg,
                         z=z_seg,
                         mode='lines',
-                        line=dict(color=colors[j], width=10),
+                        line=dict(color=colors[j], width=20),
                         name=layer_type,
                         showlegend=show_label
                     ))
