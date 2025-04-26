@@ -40,56 +40,28 @@ else:
 
 # Display the dataframe in an editable table
 st.subheader("Edit Borehole Data")
-# Ensure the DataFrame has all required columns with default values
-required_columns = [
-    "BHID", "Easting", "Northing", "Ground Level",
-    "Layer1 Depth", "Layer1 Type", "Layer2 Depth", "Layer2 Type",
-    "Layer3 Depth", "Layer3 Type", "Include in 3D"
-]
-for col in required_columns:
-    if col not in df.columns:
-        df[col] = None
-
 edited_df = st.data_editor(
     df,
     num_rows="dynamic",  # Allow adding/deleting rows
     use_container_width=True,
     column_config={
-        "BHID": st.column_config.TextColumn("BHID", default="BH_NEW"),
-        "Easting": st.column_config.NumberColumn("Easting", default=0.0),
-        "Northing": st.column_config.NumberColumn("Northing", default=0.0),
-        "Ground Level": st.column_config.NumberColumn("Ground Level", default=0.0),
+        "BHID": st.column_config.TextColumn("BHID"),
+        "Easting": st.column_config.NumberColumn("Easting"),
+        "Northing": st.column_config.NumberColumn("Northing"),
+        "Ground Level": st.column_config.NumberColumn("Ground Level"),
         "Layer1 Depth": st.column_config.NumberColumn("Layer1 Depth"),
         "Layer1 Type": st.column_config.TextColumn("Layer1 Type"),
         "Layer2 Depth": st.column_config.NumberColumn("Layer2 Depth"),
         "Layer2 Type": st.column_config.TextColumn("Layer2 Type"),
         "Layer3 Depth": st.column_config.NumberColumn("Layer3 Depth"),
         "Layer3 Type": st.column_config.TextColumn("Layer3 Type"),
-        "Include in 3D": st.column_config.SelectboxColumn(
-            "Include in 3D",
-            options=["yes", "no"],
-            default="yes"
-        ),
+        "Include in 3D": st.column_config.TextColumn("Include in 3D"),
     }
 )
 
-# Use the edited dataframe for further processing
+# Use the edited dataframe for further processing and reset the index
 df = edited_df
-# Fill any missing values in new rows with defaults
-df = df.fillna({
-    "BHID": "BH_NEW",
-    "Easting": 0.0,
-    "Northing": 0.0,
-    "Ground Level": 0.0,
-    "Include in 3D": "yes"
-})
-# Filter the DataFrame to include only rows where "Include in 3D" is "yes"
-df = df[df['Include in 3D'].str.strip().str.lower() == 'yes']
 df = df.reset_index(drop=True)  # Reset index to ensure sequential integers
-
-# Debug: Display the DataFrame after editing and filtering
-st.write("DataFrame after editing and filtering (Include in 3D = 'yes'):")
-st.write(df)
 
 # Sidebar for visualization settings
 st.sidebar.header("Visualization Settings")
@@ -408,7 +380,7 @@ def plot_2d_cross_section(selected_bhids):
                 ))
                 plotted_layer_types.add(layer_type)
 
-        # Layer 1 to Layer2
+        # Layer 1 to Layer 2
         if pd.notna(layer2_depths[i]):
             layer_type = section_df.iloc[i]['Layer2 Type']
             color = color_map.get(layer_type, 'grey')
