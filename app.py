@@ -141,6 +141,7 @@ for layer_type, pts in layers_data_by_type.items():
         surfaces[layer_type] = z_grid
 
 # Function to plot 3D visualization using Plotly
+# Function to plot 3D visualization using Plotly
 def plot_3d_visualization(view_mode):
     try:
         # Initialize the Plotly figure
@@ -200,7 +201,7 @@ def plot_3d_visualization(view_mode):
                     fig.add_trace(go.Scatter3d(
                         x=x_seg, y=y_seg, z=z_seg,
                         mode='lines',
-                        line=dict(color=colors[j], width=5),
+                        line=dict(color=colors[j], width=10),  # Increased thickness from 5 to 10
                         name=label or layer_type,
                         showlegend=bool(label)
                     ))
