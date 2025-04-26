@@ -141,8 +141,7 @@ for layer_type, pts in layers_data_by_type.items():
         surfaces[layer_type] = z_grid
 
 # Function to plot 3D visualization using Plotly
-# Function to plot 3D visualization using Plotly
-def plot_3d_visualization(view_mode):
+def plot_3d_visualization(view_mode, selected_surfaces=None):
     try:
         # Initialize the Plotly figure
         fig = go.Figure()
@@ -152,24 +151,27 @@ def plot_3d_visualization(view_mode):
 
         # Plot surfaces (if applicable)
         if view_mode in [2, 3]:  # Modes 2 and 3 include surfaces
+            # If no surfaces are selected, default to showing all
+            surfaces_to_plot = selected_surfaces if selected_surfaces else list(surfaces.keys())
             for layer_type, z_grid in surfaces.items():
-                if layer_type == 'Ground Level':
-                    # Use the same color as the most common Layer 1 type
-                    ground_color = color_map.get(most_common_layer1_type, '#228B22')  # Fallback to green if no Layer 1 type
-                    fig.add_trace(go.Surface(
-                        x=grid_x, y=grid_y, z=z_grid,
-                        colorscale=[[0, ground_color], [1, ground_color]],
-                        name=f'Ground Surface ({most_common_layer1_type})',
-                        showscale=False
-                    ))
-                else:
-                    color = color_map.get(layer_type, 'grey')
-                    fig.add_trace(go.Surface(
-                        x=grid_x, y=grid_y, z=z_grid,
-                        colorscale=[[0, color], [1, color]],
-                        name=f"{layer_type} Surface",
-                        showscale=False
-                    ))
+                if layer_type in surfaces_to_plot:  # Only plot selected surfaces
+                    if layer_type == 'Ground Level':
+                        # Use the same color as the most common Layer 1 type
+                        ground_color = color_map.get(most_common_layer1_type, '#228B22')  # Fallback to green if no Layer 1 type
+                        fig.add_trace(go.Surface(
+                            x=grid_x, y=grid_y, z=z_grid,
+                            colorscale=[[0, ground_color], [1, ground_color]],
+                            name=f'Ground Surface ({most_common_layer1_type})',
+                            showscale=False
+                        ))
+                    else:
+                        color = color_map.get(layer_type, 'grey')
+                        fig.add_trace(go.Surface(
+                            x=grid_x, y=grid_y, z=z_grid,
+                            colorscale=[[0, color], [1, color]],
+                            name=f"{layer_type} Surface",
+                            showscale=False
+                        ))
 
         # Plot boreholes (if applicable)
         if view_mode in [1, 2]:  # Modes 1 and 2 include borelogs
@@ -201,7 +203,7 @@ def plot_3d_visualization(view_mode):
                     fig.add_trace(go.Scatter3d(
                         x=x_seg, y=y_seg, z=z_seg,
                         mode='lines',
-                        line=dict(color=colors[j], width=10),  # Increased thickness from 5 to 10
+                        line=dict(color=colors[j], width=10),
                         name=label or layer_type,
                         showlegend=bool(label)
                     ))
@@ -329,11 +331,13 @@ def plot_2d_cross_section(selected_bhids):
             deepest_depth = l3
 
         # Add borehole as a vertical rectangle (using Plotly shapes)
-        rect_width = 3
+        rect_width = 1.5
         fig.add_shape(
             type="rect",
-            x0=x - rect_width/2, x1=x + rect_width/2,
-            y0=deepest_depth, y1=gl,
+            x0=x - rect_width/2,
+            x1=x + rect_width/2,
+            y0=deepest_depth,
+            y1=gl,
             fillcolor="#D3D3D3",
             line=dict(color="black", width=1.5),
             opacity=0.8,
@@ -405,7 +409,8 @@ def plot_2d_cross_section(selected_bhids):
         bhid = section_df.iloc[i]['BHID']
         actual_elev = section_df.iloc[i]['Ground Level']
         fig.add_trace(go.Scatter(
-            x=[x], y=[gl],
+            x=[x],
+            y=[gl],
             mode="text",
             text=[f"{bhid}<br>Elev: {actual_elev:.2f}"],
             textposition="top center",
@@ -415,7 +420,8 @@ def plot_2d_cross_section(selected_bhids):
 
     # Plot the ground surface line
     fig.add_trace(go.Scatter(
-        x=distances, y=ground_levels,
+        x=distances,
+        y=ground_levels,
         mode="lines",
         line=dict(color="black", width=2),
         name="Ground Surface"
@@ -430,6 +436,11 @@ def plot_2d_cross_section(selected_bhids):
         title="2D Cross-Section of Selected Boreholes",
         xaxis_title="Distance Along Section (units)",
         yaxis_title="Depth (exaggerated)",
+        yaxis=dict(
+            range=[y_max, y_min],  # Manually set range to reverse the axis
+            gridcolor="rgba(0,0,0,0.2)",
+            zeroline=False
+        ),
         showlegend=True,
         legend=dict(
             x=0,
@@ -452,11 +463,22 @@ def plot_2d_cross_section(selected_bhids):
 # Streamlit App
 # Option Buttons for 3D Visualizations
 st.header("3D Visualizations")
+
+# Get list of available surfaces for toggling
+available_surfaces = list(surfaces.keys())
+# Add a multi-select dropdown for selecting surfaces (for view modes 2 and 3)
+st.subheader("Select Surfaces to Display (for Borelogs with Surfaces and Only Surfaces)")
+selected_surfaces = st.multiselect(
+    "Choose surfaces to display",
+    options=available_surfaces,
+    default=available_surfaces  # Default to showing all surfaces
+)
+
 col1, col2, col3 = st.columns(3)
 
 with col1:
     if st.button("1) Only Borelogs"):
-        fig = plot_3d_visualization(1)
+        fig = plot_3d_visualization(1)  # View mode 1 doesn't need surface selection
         if fig:
             chart = st.plotly_chart(fig, use_container_width=True)
             st.markdown(
@@ -470,31 +492,37 @@ with col1:
 
 with col2:
     if st.button("2) Borelogs with Surfaces"):
-        fig = plot_3d_visualization(2)
-        if fig:
-            chart = st.plotly_chart(fig, use_container_width=True)
-            st.markdown(
-                """
-                <script>
-                document.querySelector('iframe').contentWindow.document.querySelector('.modebar-btn[data-title="Toggle Fullscreen"]').click();
-                </script>
-                """,
-                unsafe_allow_html=True
-            )
+        if not selected_surfaces:
+            st.warning("Please select at least one surface to display.")
+        else:
+            fig = plot_3d_visualization(2, selected_surfaces=selected_surfaces)
+            if fig:
+                chart = st.plotly_chart(fig, use_container_width=True)
+                st.markdown(
+                    """
+                    <script>
+                    document.querySelector('iframe').contentWindow.document.querySelector('.modebar-btn[data-title="Toggle Fullscreen"]').click();
+                    </script>
+                    """,
+                    unsafe_allow_html=True
+                )
 
 with col3:
     if st.button("3) Only Surfaces"):
-        fig = plot_3d_visualization(3)
-        if fig:
-            chart = st.plotly_chart(fig, use_container_width=True)
-            st.markdown(
-                """
-                <script>
-                document.querySelector('iframe').contentWindow.document.querySelector('.modebar-btn[data-title="Toggle Fullscreen"]').click();
-                </script>
-                """,
-                unsafe_allow_html=True
-            )
+        if not selected_surfaces:
+            st.warning("Please select at least one surface to display.")
+        else:
+            fig = plot_3d_visualization(3, selected_surfaces=selected_surfaces)
+            if fig:
+                chart = st.plotly_chart(fig, use_container_width=True)
+                st.markdown(
+                    """
+                    <script>
+                    document.querySelector('iframe').contentWindow.document.querySelector('.modebar-btn[data-title="Toggle Fullscreen"]').click();
+                    </script>
+                    """,
+                    unsafe_allow_html=True
+                )
 
 # 2D Cross-Section with Checklist
 st.header("2D Cross-Section")
