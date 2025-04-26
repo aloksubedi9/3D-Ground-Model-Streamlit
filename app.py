@@ -68,7 +68,7 @@ z_scale = st.sidebar.slider(
     "Vertical Exaggeration",
     min_value=1,
     max_value=5,
-    value=1,  # Default to 1 (no exaggeration)
+    value=1,
     step=1,
     help="Multiplier for vertical elevation (1 means no exaggeration)"
 )
@@ -163,8 +163,8 @@ def plot_3d_visualization(view_mode, selected_surfaces=None):
             for layer_type, z_grid in surfaces.items():
                 if layer_type in surfaces_to_plot:  # Only plot selected surfaces
                     if layer_type == 'Ground Level':
-                        # Use the same color as the most common Layer 1 type
-                        ground_color = color_map.get(most_common_layer1_type, '#228B22')  # Fallback to green if no Layer 1 type
+                        # Use the same color as the most common Layer 1 type, fallback to green (#228B22)
+                        ground_color = color_map.get(most_common_layer1_type, '#228B22')
                         fig.add_trace(go.Surface(
                             x=grid_x,
                             y=grid_y,
@@ -172,7 +172,7 @@ def plot_3d_visualization(view_mode, selected_surfaces=None):
                             colorscale=[[0, ground_color], [1, ground_color]],
                             name=f'Ground Surface ({most_common_layer1_type})',
                             showscale=False,
-                            opacity=0.5  # Set opacity to 0.5 for Ground Level
+                            opacity=0.2
                         ))
                     else:
                         color = color_map.get(layer_type, 'grey')
@@ -209,8 +209,9 @@ def plot_3d_visualization(view_mode, selected_surfaces=None):
                 for j in range(len(points) - 1):
                     x_seg, y_seg, z_seg = zip(points[j], points[j + 1])
                     layer_type = df.at[i, f'Layer{j + 1} Type']
-                    label = layer_type if layer_type not in plotted_layer_types else None
-                    if label:
+                    # Determine if we should show the label in the legend
+                    show_label = layer_type not in plotted_layer_types
+                    if show_label:
                         plotted_layer_types.add(layer_type)
                     fig.add_trace(go.Scatter3d(
                         x=x_seg,
@@ -218,8 +219,8 @@ def plot_3d_visualization(view_mode, selected_surfaces=None):
                         z=z_seg,
                         mode='lines',
                         line=dict(color=colors[j], width=10),
-                        name=label or layer_type,
-                        showlegend=bool(label)
+                        name=layer_type,
+                        showlegend=show_label
                     ))
 
                 # Add borehole ID with actual elevation as a marker
@@ -490,7 +491,7 @@ st.subheader("Select Surfaces to Display (for Borelogs with Surfaces and Only Su
 selected_surface_options = st.multiselect(
     "Choose surfaces to display",
     options=surface_options,
-    default=["All"],  # Default to "All"
+    default=["All"],
     help="Select 'All' to display all surfaces, or choose specific surfaces to display."
 )
 
