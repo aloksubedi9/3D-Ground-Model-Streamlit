@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import Polygon, Rectangle
 import streamlit as st
 import plotly.graph_objects as go
+import io
 
 # Set Streamlit page to wide mode
 st.set_page_config(layout="wide")
@@ -15,53 +16,77 @@ st.markdown(
     unsafe_allow_html=True
 )
 
+# Initialize DataFrame in session state to persist across uploads
+if 'df' not in st.session_state:
+    st.session_state.df = None
+
 # File uploader for input.xlsx
 uploaded_file = st.file_uploader("Upload your input.xlsx file", type=["xlsx"])
 if uploaded_file is not None:
     # Load data from the uploaded file
     try:
         df = pd.read_excel(uploaded_file, sheet_name='Sheet 1')
+        # Validate required columns
+        required_columns = [
+            "BHID", "Easting", "Northing", "Ground Level",
+            "Layer1 Depth", "Layer1 Type", "Layer2 Depth", "Layer2 Type",
+            "Layer3 Depth", "Layer3 Type", "Include in 3D"
+        ]
+        missing_cols = [col for col in required_columns if col not in df.columns]
+        if missing_cols:
+            st.error(f"Uploaded file is missing required columns: {missing_cols}")
+            st.stop()
+        # Filter for "Include in 3D" = "yes"
         df = df[df['Include in 3D'].str.strip().str.lower() == 'yes'].reset_index(drop=True)
+        st.session_state.df = df
         st.success("Loaded input.xlsx from uploaded file.")
     except Exception as e:
         st.error(f"Error reading the Excel file: {e}")
         st.stop()
 else:
     # Try to load from the local directory as a fallback
-    try:
-        df = pd.read_excel('input.xlsx', sheet_name='Sheet 1')
-        df = df[df['Include in 3D'].str.strip().str.lower() == 'yes'].reset_index(drop=True)
-    except FileNotFoundError:
-        st.error("No 'input.xlsx' file found in the directory. Please upload the file using the uploader above.")
-        st.stop()
-    except Exception as e:
-        st.error(f"Error reading the local input.xlsx file: {e}")
-        st.stop()
+    if st.session_state.df is None:
+        try:
+            df = pd.read_excel('input.xlsx', sheet_name='Sheet 1')
+            # Validate required columns
+            required_columns = [
+                "BHID", "Easting", "Northing", "Ground Level",
+                "Layer1 Depth", "Layer1 Type", "Layer2 Depth", "Layer2 Type",
+                "Layer3 Depth", "Layer3 Type", "Include in 3D"
+            ]
+            missing_cols = [col for col in required_columns if col not in df.columns]
+            if missing_cols:
+                st.error(f"Local input.xlsx is missing required columns: {missing_cols}")
+                st.stop()
+            # Filter for "Include in 3D" = "yes"
+            df = df[df['Include in 3D'].str.strip().str.lower() == 'yes'].reset_index(drop=True)
+            st.session_state.df = df
+        except FileNotFoundError:
+            st.error("No 'input.xlsx' file found in the directory. Please upload the file using the uploader above.")
+            st.stop()
+        except Exception as e:
+            st.error(f"Error reading the local input.xlsx file: {e}")
+            st.stop()
 
-# Display the dataframe in an editable table
-st.subheader("Edit Borehole Data")
-edited_df = st.data_editor(
-    df,
-    num_rows="dynamic",  # Allow adding/deleting rows
-    use_container_width=True,
-    column_config={
-        "BHID": st.column_config.TextColumn("BHID"),
-        "Easting": st.column_config.NumberColumn("Easting"),
-        "Northing": st.column_config.NumberColumn("Northing"),
-        "Ground Level": st.column_config.NumberColumn("Ground Level"),
-        "Layer1 Depth": st.column_config.NumberColumn("Layer1 Depth"),
-        "Layer1 Type": st.column_config.TextColumn("Layer1 Type"),
-        "Layer2 Depth": st.column_config.NumberColumn("Layer2 Depth"),
-        "Layer2 Type": st.column_config.TextColumn("Layer2 Type"),
-        "Layer3 Depth": st.column_config.NumberColumn("Layer3 Depth"),
-        "Layer3 Type": st.column_config.TextColumn("Layer3 Type"),
-        "Include in 3D": st.column_config.TextColumn("Include in 3D"),
-    }
+# Use the DataFrame from session state
+df = st.session_state.df
+
+# Display the dataframe as a static table
+st.subheader("Borehole Data")
+st.dataframe(df, use_container_width=True)
+
+# Provide a download button for the current DataFrame
+st.subheader("Download Data to Edit")
+buffer = io.BytesIO()
+df.to_excel(buffer, index=False, engine='openpyxl')
+buffer.seek(0)
+st.download_button(
+    label="Download input.xlsx",
+    data=buffer,
+    file_name="input.xlsx",
+    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 )
-
-# Use the edited dataframe for further processing and reset the index
-df = edited_df
-df = df.reset_index(drop=True)  # Reset index to ensure sequential integers
+st.write("Download the file, edit it in Excel (e.g., add/delete rows, modify values, change 'Include in 3D' to 'yes' or 'no'), and reupload it above.")
 
 # Sidebar for visualization settings
 st.sidebar.header("Visualization Settings")
