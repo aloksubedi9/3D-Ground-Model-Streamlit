@@ -89,9 +89,6 @@ color_map = {
     )
 }
 
-# Determine the most common Layer 1 type for ground surface color
-most_common_layer1_type = df['Layer1 Type'].mode()[0] if not df['Layer1 Type'].isna().all() else None
-
 # Prepare borehole data
 coords = df[['Easting', 'Northing']].values
 ground_levels = df['Ground Level'].values
@@ -163,14 +160,14 @@ def plot_3d_visualization(view_mode, selected_surfaces=None):
             for layer_type, z_grid in surfaces.items():
                 if layer_type in surfaces_to_plot:  # Only plot selected surfaces
                     if layer_type == 'Ground Level':
-                        # Use the same color as the most common Layer 1 type, fallback to green (#228B22)
-                        ground_color = color_map.get(most_common_layer1_type, '#228B22')
+                        # Set ground surface color directly to green (#228B22)
+                        ground_color = '#228B22'
                         fig.add_trace(go.Surface(
                             x=grid_x,
                             y=grid_y,
                             z=z_grid,
                             colorscale=[[0, ground_color], [1, ground_color]],
-                            name=f'Ground Surface ({most_common_layer1_type})',
+                            name='Ground Surface',
                             showscale=False,
                             opacity=0.2
                         ))
