@@ -9,6 +9,12 @@ import plotly.graph_objects as go
 # Set Streamlit page to wide mode
 st.set_page_config(layout="wide")
 
+# Display the main title at the top and center it
+st.markdown(
+    "<h1 style='text-align: center;'>3D Ground Model Visualization</h1>",
+    unsafe_allow_html=True
+)
+
 # File uploader for input.xlsx
 uploaded_file = st.file_uploader("Upload your input.xlsx file", type=["xlsx"])
 if uploaded_file is not None:
@@ -25,13 +31,36 @@ else:
     try:
         df = pd.read_excel('input.xlsx', sheet_name='Sheet 1')
         df = df[df['Include in 3D'].str.strip().str.lower() == 'yes'].reset_index(drop=True)
-        st.success("Loaded input.xlsx from local directory.")
     except FileNotFoundError:
         st.error("No 'input.xlsx' file found in the directory. Please upload the file using the uploader above.")
         st.stop()
     except Exception as e:
         st.error(f"Error reading the local input.xlsx file: {e}")
         st.stop()
+
+# Display the dataframe in an editable table
+st.subheader("Edit Borehole Data")
+edited_df = st.data_editor(
+    df,
+    num_rows="dynamic",  # Allow adding/deleting rows
+    use_container_width=True,
+    column_config={
+        "BHID": st.column_config.TextColumn("BHID"),
+        "Easting": st.column_config.NumberColumn("Easting"),
+        "Northing": st.column_config.NumberColumn("Northing"),
+        "Ground Level": st.column_config.NumberColumn("Ground Level"),
+        "Layer1 Depth": st.column_config.NumberColumn("Layer1 Depth"),
+        "Layer1 Type": st.column_config.TextColumn("Layer1 Type"),
+        "Layer2 Depth": st.column_config.NumberColumn("Layer2 Depth"),
+        "Layer2 Type": st.column_config.TextColumn("Layer2 Type"),
+        "Layer3 Depth": st.column_config.NumberColumn("Layer3 Depth"),
+        "Layer3 Type": st.column_config.TextColumn("Layer3 Type"),
+        "Include in 3D": st.column_config.TextColumn("Include in 3D"),
+    }
+)
+
+# Use the edited dataframe for further processing
+df = edited_df
 
 # Sidebar for visualization settings
 st.sidebar.header("Visualization Settings")
@@ -391,11 +420,20 @@ def plot_2d_cross_section(selected_bhids):
         name="Ground Surface"
     ))
 
+    # Determine Y-axis range to ensure depth increases downward
+    y_min = min(ground_levels.min(), layer1_depths.min(), layer2_depths.min(), layer3_depths.min())
+    y_max = max(ground_levels.max(), layer1_depths.max(), layer2_depths.max(), layer3_depths.max())
+
     # Update layout for better visualization
     fig.update_layout(
         title="2D Cross-Section of Selected Boreholes",
         xaxis_title="Distance Along Section (units)",
         yaxis_title="Depth (exaggerated)",
+        yaxis=dict(
+            range=[y_max, y_min],  # Manually set range to reverse the axis
+            gridcolor="rgba(0,0,0,0.2)",
+            zeroline=False
+        ),
         showlegend=True,
         legend=dict(
             x=0,
@@ -410,15 +448,12 @@ def plot_2d_cross_section(selected_bhids):
         margin=dict(l=50, r=50, b=50, t=50),
         plot_bgcolor="#F5F5F5",
         paper_bgcolor="white",
-        xaxis=dict(gridcolor="rgba(0,0,0,0.2)", zeroline=False),
-        yaxis=dict(gridcolor="rgba(0,0,0,0.2)", zeroline=False)
+        xaxis=dict(gridcolor="rgba(0,0,0,0.2)", zeroline=False)
     )
 
     return fig
 
 # Streamlit App
-st.title("3D Ground Model Visualization")
-
 # Option Buttons for 3D Visualizations
 st.header("3D Visualizations")
 col1, col2, col3 = st.columns(3)
