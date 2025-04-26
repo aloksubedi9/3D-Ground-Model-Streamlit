@@ -64,7 +64,14 @@ df = edited_df
 
 # Sidebar for visualization settings
 st.sidebar.header("Visualization Settings")
-z_scale = st.sidebar.slider("Vertical Exaggeration", min_value=1, max_value=10, value=5, step=1)
+z_scale = st.sidebar.slider(
+    "Vertical Exaggeration",
+    min_value=1,
+    max_value=5,
+    value=1,  # Default to 1 (no exaggeration)
+    step=1,
+    help="Multiplier for vertical elevation (1 means no exaggeration)"
+)
 
 # Get unique layer types to assign colors
 all_layers = pd.concat([
@@ -159,15 +166,20 @@ def plot_3d_visualization(view_mode, selected_surfaces=None):
                         # Use the same color as the most common Layer 1 type
                         ground_color = color_map.get(most_common_layer1_type, '#228B22')  # Fallback to green if no Layer 1 type
                         fig.add_trace(go.Surface(
-                            x=grid_x, y=grid_y, z=z_grid,
+                            x=grid_x,
+                            y=grid_y,
+                            z=z_grid,
                             colorscale=[[0, ground_color], [1, ground_color]],
                             name=f'Ground Surface ({most_common_layer1_type})',
-                            showscale=False
+                            showscale=False,
+                            opacity=0.5  # Set opacity to 0.5 for Ground Level
                         ))
                     else:
                         color = color_map.get(layer_type, 'grey')
                         fig.add_trace(go.Surface(
-                            x=grid_x, y=grid_y, z=z_grid,
+                            x=grid_x,
+                            y=grid_y,
+                            z=z_grid,
                             colorscale=[[0, color], [1, color]],
                             name=f"{layer_type} Surface",
                             showscale=False
@@ -201,7 +213,9 @@ def plot_3d_visualization(view_mode, selected_surfaces=None):
                     if label:
                         plotted_layer_types.add(layer_type)
                     fig.add_trace(go.Scatter3d(
-                        x=x_seg, y=y_seg, z=z_seg,
+                        x=x_seg,
+                        y=y_seg,
+                        z=z_seg,
                         mode='lines',
                         line=dict(color=colors[j], width=10),
                         name=label or layer_type,
@@ -210,7 +224,9 @@ def plot_3d_visualization(view_mode, selected_surfaces=None):
 
                 # Add borehole ID with actual elevation as a marker
                 fig.add_trace(go.Scatter3d(
-                    x=[x], y=[y], z=[z0],
+                    x=[x],
+                    y=[y],
+                    z=[z0],
                     mode='markers+text',
                     text=[f"{BHID}<br>Elev: {actual_elev:.2f}"],
                     textposition="top center",
@@ -466,13 +482,23 @@ st.header("3D Visualizations")
 
 # Get list of available surfaces for toggling
 available_surfaces = list(surfaces.keys())
+# Add "All" option to the list of surfaces
+surface_options = ["All"] + available_surfaces
+
 # Add a multi-select dropdown for selecting surfaces (for view modes 2 and 3)
 st.subheader("Select Surfaces to Display (for Borelogs with Surfaces and Only Surfaces)")
-selected_surfaces = st.multiselect(
+selected_surface_options = st.multiselect(
     "Choose surfaces to display",
-    options=available_surfaces,
-    default=available_surfaces  # Default to showing all surfaces
+    options=surface_options,
+    default=["All"],  # Default to "All"
+    help="Select 'All' to display all surfaces, or choose specific surfaces to display."
 )
+
+# Determine which surfaces to plot based on selection
+if "All" in selected_surface_options:
+    surfaces_to_plot = available_surfaces
+else:
+    surfaces_to_plot = [s for s in selected_surface_options if s in available_surfaces]
 
 col1, col2, col3 = st.columns(3)
 
@@ -492,10 +518,10 @@ with col1:
 
 with col2:
     if st.button("2) Borelogs with Surfaces"):
-        if not selected_surfaces:
+        if not surfaces_to_plot:
             st.warning("Please select at least one surface to display.")
         else:
-            fig = plot_3d_visualization(2, selected_surfaces=selected_surfaces)
+            fig = plot_3d_visualization(2, selected_surfaces=surfaces_to_plot)
             if fig:
                 chart = st.plotly_chart(fig, use_container_width=True)
                 st.markdown(
@@ -509,10 +535,10 @@ with col2:
 
 with col3:
     if st.button("3) Only Surfaces"):
-        if not selected_surfaces:
+        if not surfaces_to_plot:
             st.warning("Please select at least one surface to display.")
         else:
-            fig = plot_3d_visualization(3, selected_surfaces=selected_surfaces)
+            fig = plot_3d_visualization(3, selected_surfaces=surfaces_to_plot)
             if fig:
                 chart = st.plotly_chart(fig, use_container_width=True)
                 st.markdown(
