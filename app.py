@@ -59,8 +59,9 @@ edited_df = st.data_editor(
     }
 )
 
-# Use the edited dataframe for further processing
+# Use the edited dataframe for further processing and reset the index
 df = edited_df
+df = df.reset_index(drop=True)  # Reset index to ensure sequential integers
 
 # Sidebar for visualization settings
 st.sidebar.header("Visualization Settings")
@@ -215,7 +216,7 @@ def plot_3d_visualization(view_mode, selected_surfaces=None):
                         y=y_seg,
                         z=z_seg,
                         mode='lines',
-                        line=dict(color=colors[j], width=20),
+                        line=dict(color=colors[j], width=10),
                         name=layer_type,
                         showlegend=show_label
                     ))
@@ -228,7 +229,7 @@ def plot_3d_visualization(view_mode, selected_surfaces=None):
                     mode='markers+text',
                     text=[f"{BHID}<br>Elev: {actual_elev:.2f}"],
                     textposition="top center",
-                    marker=dict(size=8, color='black'),
+                    marker=dict(size=5, color='black'),
                     showlegend=False
                 ))
 
@@ -468,7 +469,7 @@ def plot_2d_cross_section(selected_bhids):
         height=600,
         margin=dict(l=50, r=50, b=50, t=50),
         plot_bgcolor="#F5F5F5",
-        paper_bgcolor="black",
+        paper_bgcolor="white",
         xaxis=dict(gridcolor="rgba(0,0,0,0.2)", zeroline=False)
     )
 
