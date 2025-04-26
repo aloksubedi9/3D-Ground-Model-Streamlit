@@ -328,7 +328,7 @@ def plot_2d_cross_section(selected_bhids):
             deepest_depth = l3
 
         # Add borehole as a vertical rectangle (using Plotly shapes)
-        rect_width = 1.5
+        rect_width = 3
         fig.add_shape(
             type="rect",
             x0=x - rect_width/2, x1=x + rect_width/2,
