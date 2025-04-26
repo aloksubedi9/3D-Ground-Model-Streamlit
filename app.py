@@ -396,7 +396,6 @@ def plot_2d_cross_section(selected_bhids):
         title="2D Cross-Section of Selected Boreholes",
         xaxis_title="Distance Along Section (units)",
         yaxis_title="Depth (exaggerated)",
-        yaxis_autorange="reversed",
         showlegend=True,
         legend=dict(
             x=0,
