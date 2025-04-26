@@ -477,7 +477,7 @@ def plot_2d_cross_section(selected_bhids):
         xaxis_title="Distance Along Section (units)",
         yaxis_title="Depth (exaggerated)",
         yaxis=dict(
-            range=[y_max, y_min],  # Manually set range to reverse the axis
+            #range=[y_max, y_min],  # Manually set range to reverse the axis
             gridcolor="rgba(0,0,0,0.2)",
             zeroline=False
         ),
