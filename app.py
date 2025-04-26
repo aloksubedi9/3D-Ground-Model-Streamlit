@@ -494,7 +494,7 @@ def plot_2d_cross_section(selected_bhids):
         height=600,
         margin=dict(l=50, r=50, b=50, t=50),
         plot_bgcolor="#F5F5F5",
-        paper_bgcolor="white",
+        paper_bgcolor="black",
         xaxis=dict(gridcolor="rgba(0,0,0,0.2)", zeroline=False)
     )
 
