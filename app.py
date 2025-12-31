@@ -64,8 +64,7 @@ predefined_soil_color_map = {
     'GP-GM': 'rgb(128,128,128)', 'CH': 'rgb(0,100,0)', 'ML-SM': 'rgb(255,192,203)',
     'CL': 'rgb(135,206,250)', 'GM': 'rgb(169,169,169)', 'GC': 'rgb(112,128,144)',
     'ML': 'rgb(255,228,181)', 'SP': 'rgb(255,222,173)', 'CHAR': 'rgb(47,79,79)',
-    'SOIL': 'rgb(255,255,0)',           #YELLOW
-    'RM': 'rgb(128,128,128)'
+    'SOIL': 'rgb(255,255,0)', 'RM': 'rgb(128,128,128)'
 }
 
 # Build color map only for present soil types
