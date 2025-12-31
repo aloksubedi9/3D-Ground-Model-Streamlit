@@ -1,591 +1,160 @@
-import numpy as np
-import pandas as pd
-from scipy.interpolate import griddata
-import matplotlib.pyplot as plt
-from matplotlib.patches import Polygon, Rectangle
 import streamlit as st
+import pandas as pd
+import numpy as np
+from scipy.interpolate import griddata
+from scipy.spatial import ConvexHull
 import plotly.graph_objects as go
-import io
+from matplotlib import cm
 
-# Set Streamlit page to wide mode
-st.set_page_config(layout="wide")
+st.title("Interactive 3D Ground Surface with Borehole Logs")
 
-# Display the main title at the top and center it
-st.markdown(
-    "<h1 style='text-align: center;'>3D Ground Model Visualization</h1>",
-    unsafe_allow_html=True
-)
+# ===== Update these paths if your CSV files have different names/locations =====
+surface_csv_path = r'CB1.csv'                  # Surface points
+borehole_csv_path = r'boreholes.csv'           # Borehole locations
+bh_details_csv_path = r'BHdetails2.csv'         # Borehole stratigraphy
 
-# Initialize DataFrame in session state to persist across uploads
-if 'df' not in st.session_state:
-    st.session_state.df = None
+# ===== 1. Read CSVs =====
+df_surface = pd.read_csv(surface_csv_path)
+df_boreholes = pd.read_csv(borehole_csv_path)
+df_bh_details = pd.read_csv(bh_details_csv_path)
 
-# File uploader for input.xlsx
-uploaded_file = st.file_uploader("Upload your input.xlsx file", type=["xlsx"])
-if uploaded_file is not None:
-    # Load data from the uploaded file
-    try:
-        df = pd.read_excel(uploaded_file, sheet_name='Sheet 1')
-        # Validate required columns
-        required_columns = [
-            "BHID", "Easting", "Northing", "Ground Level",
-            "Layer1 Depth", "Layer1 Type", "Layer2 Depth", "Layer2 Type",
-            "Layer3 Depth", "Layer3 Type", "Include in 3D"
-        ]
-        missing_cols = [col for col in required_columns if col not in df.columns]
-        if missing_cols:
-            st.error(f"Uploaded file is missing required columns: {missing_cols}")
-            st.stop()
-        # Filter for "Include in 3D" = "yes"
-        df = df[df['Include in 3D'].str.strip().str.lower() == 'yes'].reset_index(drop=True)
-        st.session_state.df = df
-        st.success("Loaded input.xlsx from uploaded file.")
-    except Exception as e:
-        st.error(f"Error reading the Excel file: {e}")
+# Column checks
+for df, cols, name in [
+    (df_surface, ['Easting', 'Northing', 'Elevation'], "Surface CSV"),
+    (df_boreholes, ['BH ID', 'Easting', 'Northing'], "Boreholes CSV"),
+    (df_bh_details, ['BH', 'FROM', 'TO', 'SOIL TYPE'], "BH Details CSV")
+]:
+    if not all(col in df.columns for col in cols):
+        st.error(f"{name} must contain columns: {cols}")
         st.stop()
-else:
-    # Try to load from the local directory as a fallback
-    if st.session_state.df is None:
-        try:
-            df = pd.read_excel('input.xlsx', sheet_name='Sheet 1')
-            # Validate required columns
-            required_columns = [
-                "BHID", "Easting", "Northing", "Ground Level",
-                "Layer1 Depth", "Layer1 Type", "Layer2 Depth", "Layer2 Type",
-                "Layer3 Depth", "Layer3 Type", "Include in 3D"
-            ]
-            missing_cols = [col for col in required_columns if col not in df.columns]
-            if missing_cols:
-                st.error(f"Local input.xlsx is missing required columns: {missing_cols}")
-                st.stop()
-            # Filter for "Include in 3D" = "yes"
-            df = df[df['Include in 3D'].str.strip().str.lower() == 'yes'].reset_index(drop=True)
-            st.session_state.df = df
-        except FileNotFoundError:
-            st.error("No 'input.xlsx' file found in the directory. Please upload the file using the uploader above.")
-            st.stop()
-        except Exception as e:
-            st.error(f"Error reading the local input.xlsx file: {e}")
-            st.stop()
 
-# Use the DataFrame from session state
-df = st.session_state.df
+# Extract data
+easting = df_surface['Easting'].values
+northing = df_surface['Northing'].values
+elevation = df_surface['Elevation'].values
 
-# Display the dataframe as a static table
-st.subheader("Borehole Data")
-st.dataframe(df, use_container_width=True)
+bh_ids = df_boreholes['BH ID'].values
+bh_easting = df_boreholes['Easting'].values
+bh_northing = df_boreholes['Northing'].values
 
-# Provide a download button for the current DataFrame
-st.subheader("Download Data to Edit")
-buffer = io.BytesIO()
-df.to_excel(buffer, index=False, engine='openpyxl')
-buffer.seek(0)
-st.download_button(
-    label="Download input.xlsx",
-    data=buffer,
-    file_name="input.xlsx",
-    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-)
-st.write("Download the file, edit it in Excel (e.g., add/delete rows, modify values, change 'Include in 3D' to 'yes' or 'no'), and reupload it above.")
+# ===== Get unique soil types actually present =====
+present_soil_types = df_bh_details['SOIL TYPE'].dropna().unique().tolist()
 
-# Sidebar for visualization settings
-st.sidebar.header("Visualization Settings")
-z_scale = st.sidebar.slider(
-    "Vertical Exaggeration",
-    min_value=1,
-    max_value=5,
-    value=1,
-    step=1,
-    help="Multiplier for vertical elevation (1 means no exaggeration)"
-)
-
-# Get unique layer types to assign colors
-all_layers = pd.concat([
-    df[['Layer1 Type']].rename(columns={'Layer1 Type': 'Type'}),
-    df[['Layer2 Type']].rename(columns={'Layer2 Type': 'Type'}),
-    df[['Layer3 Type']].rename(columns={'Layer3 Type': 'Type'})
-])
-unique_types = all_layers['Type'].dropna().unique()
-
-# Assign color map (Plotly accepts hex colors)
-color_map = {
-    layer: color for layer, color in zip(
-        unique_types,
-        ['#8B0000', '#00008B', '#FFA500', '#800080', '#708090', '#006400', '#00BFFF']
-    )
+# ===== Predefined colors =====
+predefined_soil_color_map = {
+    'SM-ML': 'rgb(255,255,0)', 'SC': 'rgb(210,180,140)', 'CI': 'rgb(0,128,0)',
+    'SM/SM-ML': 'rgb(255,215,0)', 'ROCK': 'rgb(139,69,19)', 'SM': 'rgb(255,255,224)',
+    'GP-GM': 'rgb(128,128,128)', 'CH': 'rgb(0,100,0)', 'ML-SM': 'rgb(255,192,203)',
+    'CL': 'rgb(135,206,250)', 'GM': 'rgb(169,169,169)', 'GC': 'rgb(112,128,144)',
+    'ML': 'rgb(255,228,181)', 'SP': 'rgb(255,222,173)', 'CHAR': 'rgb(47,79,79)'
 }
 
-# Prepare borehole data
-coords = df[['Easting', 'Northing']].values
-ground_levels = df['Ground Level'].values
+# Build color map only for present types
+soil_color_map = {}
+for soil_type in present_soil_types:
+    soil_color_map[soil_type] = predefined_soil_color_map.get(soil_type, 'rgb(0,0,0)')
+    if soil_type not in predefined_soil_color_map:
+        st.warning(f"Soil type '{soil_type}' not predefined – using black.")
 
-# Apply vertical exaggeration for plotting
-ground_levels_exag = ground_levels * z_scale
-x_vals, y_vals = coords[:, 0], coords[:, 1]
+# ===== Grid & exaggeration settings =====
+h_exaggeration = 2
+ve_factor = 1.0
+grid_resolution = 100
 
-# Initialize layers dict for surface building by type
-layers_data_by_type = {'Ground Level': []}
-for layer_type in unique_types:
-    layers_data_by_type[layer_type] = []
+# Scaled coordinates
+easting_scaled = easting * h_exaggeration
+northing_scaled = northing * h_exaggeration
+bh_easting_scaled = bh_easting * h_exaggeration
+bh_northing_scaled = bh_northing * h_exaggeration
 
-# Fill layers_data_by_type dict with exaggerated Z values based on layer type
-for i in range(len(df)):
-    x, y = x_vals[i], y_vals[i]
-    gl = df.at[i, 'Ground Level'] * z_scale
-    l1 = df.at[i, 'Layer1 Depth'] * z_scale if pd.notna(df.at[i, 'Layer1 Depth']) else np.nan
-    l2 = df.at[i, 'Layer2 Depth'] * z_scale if pd.notna(df.at[i, 'Layer2 Depth']) else np.nan
-    l3 = df.at[i, 'Layer3 Depth'] * z_scale if pd.notna(df.at[i, 'Layer3 Depth']) else np.nan
+# Grid
+x_min, x_max = easting_scaled.min(), easting_scaled.max()
+y_min, y_max = northing_scaled.min(), northing_scaled.max()
+buffer_x = (x_max - x_min) * 0.05
+buffer_y = (y_max - y_min) * 0.05
+grid_x, grid_y = np.mgrid[x_min-buffer_x:x_max+buffer_x:grid_resolution*1j,
+                          y_min-buffer_y:y_max+buffer_y:grid_resolution*1j]
 
-    # Add ground level
-    layers_data_by_type['Ground Level'].append((x, y, gl))
+grid_z = griddata((easting_scaled, northing_scaled), elevation, (grid_x, grid_y),
+                  method='linear', fill_value=np.nanmean(elevation))
 
-    # Add depths based on layer type
-    if pd.notna(df.at[i, 'Layer1 Depth']) and pd.notna(df.at[i, 'Layer1 Type']):
-        layer_type = df.at[i, 'Layer1 Type']
-        layers_data_by_type[layer_type].append((x, y, l1))
+mean_z = np.nanmean(grid_z)
+grid_z = (grid_z - mean_z) * ve_factor + mean_z
 
-    if pd.notna(df.at[i, 'Layer2 Depth']) and pd.notna(df.at[i, 'Layer2 Type']):
-        layer_type = df.at[i, 'Layer2 Type']
-        layers_data_by_type[layer_type].append((x, y, l2))
+# Borehole surface elevations
+bh_z = griddata((easting_scaled, northing_scaled), elevation,
+                (bh_easting_scaled, bh_northing_scaled), method='linear')
+bh_z = (bh_z - mean_z) * ve_factor + mean_z
 
-    if pd.notna(df.at[i, 'Layer3 Depth']) and pd.notna(df.at[i, 'Layer3 Type']):
-        layer_type = df.at[i, 'Layer3 Type']
-        layers_data_by_type[layer_type].append((x, y, l3))
+bh_coord_map = dict(zip(df_boreholes['BH ID'],
+                        zip(bh_easting_scaled, bh_northing_scaled, bh_z)))
 
-# Create interpolation grid for surfaces
-grid_x, grid_y = np.meshgrid(
-    np.linspace(x_vals.min(), x_vals.max(), 60),
-    np.linspace(y_vals.min(), y_vals.max(), 60)
-)
+# Convex hull mask
+points = np.vstack((easting_scaled, northing_scaled)).T
+hull = ConvexHull(points)
 
-def interp_layer(layer_pts):
-    pts = np.array(layer_pts)
-    return griddata(pts[:, :2], pts[:, 2], (grid_x, grid_y), method='cubic')
+def point_in_hull(p, h, tol=1e-12):
+    return all(np.dot(eq[:-1], p) + eq[-1] <= tol for eq in h.equations)
 
-# Interpolated surfaces based on layer type
-surfaces = {}
-for layer_type, pts in layers_data_by_type.items():
-    if len(pts) > 3:  # Need at least 4 points for interpolation
-        z_grid = interp_layer(pts)
-        z_grid = np.nan_to_num(z_grid, nan=np.nanmean(z_grid))
-        surfaces[layer_type] = z_grid
+mask = np.array([[point_in_hull([grid_x[i,j], grid_y[i,j]], hull)
+                  for j in range(grid_x.shape[1])] for i in range(grid_x.shape[0])])
+grid_z_valid = np.ma.masked_where(~mask, grid_z)
 
-# Function to plot 3D visualization using Plotly
-def plot_3d_visualization(view_mode, selected_surfaces=None):
-    try:
-        # Initialize the Plotly figure
-        fig = go.Figure()
+# Colorscale
+cmap = cm.turbo
+steps = 20
+colorscale = [[i/(steps-1), f'rgb({int(c[0]*255)},{int(c[1]*255)},{int(c[2]*255)})']
+              for i, c in enumerate(cmap(np.linspace(0, 1, steps)))]
 
-        # Track plotted layer types to avoid duplicate legend entries
-        plotted_layer_types = set()
+# Z limits
+max_depth = df_bh_details['TO'].max() * ve_factor
+z_min = min(np.nanmin(grid_z), np.nanmin(bh_z) - max_depth * 1.1)
+z_max = np.nanmax(grid_z) * 1.1
 
-        # Plot surfaces (if applicable)
-        if view_mode in [2, 3]:  # Modes 2 and 3 include surfaces
-            # If no surfaces are selected, default to showing all
-            surfaces_to_plot = selected_surfaces if selected_surfaces else list(surfaces.keys())
-            for layer_type, z_grid in surfaces.items():
-                if layer_type in surfaces_to_plot:  # Only plot selected surfaces
-                    if layer_type == 'Ground Level':
-                        # Set ground surface color directly to green (#228B22)
-                        ground_color = '#228B22'
-                        fig.add_trace(go.Surface(
-                            x=grid_x,
-                            y=grid_y,
-                            z=z_grid,
-                            colorscale=[[0, ground_color], [1, ground_color]],
-                            name='Ground Surface',
-                            showscale=False,
-                            opacity=0.2
-                        ))
-                    else:
-                        color = color_map.get(layer_type, 'grey')
-                        fig.add_trace(go.Surface(
-                            x=grid_x,
-                            y=grid_y,
-                            z=z_grid,
-                            colorscale=[[0, color], [1, color]],
-                            name=f"{layer_type} Surface",
-                            showscale=False
-                        ))
+# Figure
+fig = go.Figure()
 
-        # Plot boreholes (if applicable)
-        if view_mode in [1, 2]:  # Modes 1 and 2 include borelogs
-            for i in range(len(df)):
-                x, y = x_vals[i], y_vals[i]
-                z0 = df.at[i, 'Ground Level'] * z_scale
-                BHID = df.at[i, 'BHID']
-                actual_elev = df.at[i, 'Ground Level']  # Actual (non-exaggerated) elevation
+fig.add_trace(go.Surface(x=grid_x, y=grid_y, z=grid_z_valid,
+                         colorscale=colorscale, showscale=True,
+                         colorbar=dict(title='Elevation (m)', len=0.5, x=1.1),
+                         name='Ground Surface'))
 
-                points = [(x, y, z0)]
-                colors = []
+fig.add_trace(go.Scatter3d(x=bh_easting_scaled, y=bh_northing_scaled, z=bh_z + 0.25,
+                           mode='markers', marker=dict(size=12, color='red'),
+                           name='Boreholes'))
 
-                for layer_idx in [1, 2, 3]:
-                    depth_col = f'Layer{layer_idx} Depth'
-                    type_col = f'Layer{layer_idx} Type'
-                    if pd.notna(df.at[i, depth_col]):
-                        z = df.at[i, depth_col] * z_scale
-                        points.append((x, y, z))
-                        layer_type = df.at[i, type_col]
-                        colors.append(color_map.get(layer_type, 'grey'))
+# BH labels
+for i, bh_id in enumerate(bh_ids):
+    fig.add_trace(go.Scatter3d(x=[bh_easting_scaled[i]], y=[bh_northing_scaled[i]], z=[bh_z[i]],
+                               mode='text', text=[bh_id],
+                               textfont=dict(size=26, color='black'),
+                               showlegend=False))
 
-                # Draw segments with labels for the legend
-                for j in range(len(points) - 1):
-                    x_seg, y_seg, z_seg = zip(points[j], points[j + 1])
-                    layer_type = df.at[i, f'Layer{j + 1} Type']
-                    # Determine if we should show the label in the legend
-                    show_label = layer_type not in plotted_layer_types
-                    if show_label:
-                        plotted_layer_types.add(layer_type)
-                    fig.add_trace(go.Scatter3d(
-                        x=x_seg,
-                        y=y_seg,
-                        z=z_seg,
-                        mode='lines',
-                        line=dict(color=colors[j], width=10),
-                        name=layer_type,
-                        showlegend=show_label
-                    ))
+# Legend entries (only present soils)
+for soil_type, color in soil_color_map.items():
+    fig.add_trace(go.Scatter3d(x=[None], y=[None], z=[None],
+                               mode='lines', line=dict(color=color, width=20),
+                               name=soil_type, showlegend=True))
 
-                # Add borehole ID with actual elevation as a marker
-                fig.add_trace(go.Scatter3d(
-                    x=[x],
-                    y=[y],
-                    z=[z0],
-                    mode='markers+text',
-                    text=[f"{BHID}<br>Elev: {actual_elev:.2f}"],
-                    textposition="top center",
-                    marker=dict(size=5, color='black'),
-                    showlegend=False
-                ))
+# Borehole logs
+for bh_id, group in df_bh_details.groupby('BH'):
+    if bh_id not in bh_coord_map:
+        continue
+    x, y, surface_z = bh_coord_map[bh_id]
+    for _, row in group.iterrows():
+        z_from = surface_z - row['FROM'] * ve_factor
+        z_to = surface_z - row['TO'] * ve_factor
+        fig.add_trace(go.Scatter3d(x=[x,x], y=[y,y], z=[z_from, z_to],
+                                   mode='lines',
+                                   line=dict(color=soil_color_map.get(row['SOIL TYPE'], 'rgb(0,0,0)'), width=20),
+                                   showlegend=False))
 
-        # Compute axis ranges to ensure full extent
-        x_range = [df['Easting'].min(), df['Easting'].max()]
-        y_range = [df['Northing'].min(), df['Northing'].max()]
+fig.update_layout(title=f"3D Ground Model (H×{h_exaggeration}, V×{ve_factor})",
+                  scene=dict(xaxis_title='Easting', yaxis_title='Northing',
+                             zaxis_title='Elevation', zaxis=dict(range=[z_min, z_max]),
+                             aspectratio=dict(x=h_exaggeration, y=h_exaggeration, z=1)),
+                  legend=dict(x=0, y=0.5, title='Soil Types & Boreholes'))
 
-        # Update layout for better visualization with maximized dimensions
-        fig.update_layout(
-            title='3D Ground Model with Borehole Stratigraphy',
-            scene=dict(
-                xaxis_title='Easting',
-                yaxis_title='Northing',
-                zaxis_title='',
-                xaxis=dict(
-                    range=x_range,
-                    tickformat="f",  # Show full numbers without M/K
-                    gridcolor="rgba(255, 255, 255, 0.2)",
-                    zeroline=False
-                ),
-                yaxis=dict(
-                    range=y_range,
-                    tickformat="f",  # Show full numbers without M/K
-                    gridcolor="rgba(255, 255, 255, 0.2)",
-                    zeroline=False
-                ),
-                zaxis=dict(
-                    tickformat="f",
-                    gridcolor="rgba(255, 255, 255, 0.2)",
-                    zeroline=False
-                ),
-                bgcolor='black'
-            ),
-            width=1200,
-            height=800,
-            margin=dict(l=0, r=0, b=0, t=50),
-            showlegend=True,
-            legend=dict(
-                x=0,
-                y=1,
-                traceorder="normal",
-                font=dict(size=12),
-                bgcolor="rgba(255, 255, 255, 0.5)"
-            ),
-            scene_camera=dict(
-                eye=dict(x=1.5, y=1.5, z=0.5)
-            )
-        )
-
-        # Add a fullscreen button to the modebar
-        fig.update_layout(
-            modebar_add=["togglefullscreen"],
-            modebar_activecolor="#00BFFF"
-        )
-
-        return fig
-
-    except Exception as e:
-        st.error(f"Error generating 3D visualization: {e}")
-        return None
-
-# Function to plot 2D cross-section with Plotly
-def plot_2d_cross_section(selected_bhids):
-    # Validate input
-    if len(selected_bhids) < 2:
-        st.error("Please select at least 2 boreholes for the cross-section.")
-        return None
-
-    # Filter the dataframe for selected boreholes
-    section_df = df[df['BHID'].isin(selected_bhids)].copy()
-
-    # Sort the boreholes based on the order of selection to maintain user-specified order
-    section_df['BHID_order'] = section_df['BHID'].apply(lambda x: selected_bhids.index(x))
-    section_df = section_df.sort_values('BHID_order')
-
-    # Calculate cumulative distance along the section
-    eastings = section_df['Easting'].values
-    northings = section_df['Northing'].values
-    distances = [0]  # Start at 0
-    for i in range(1, len(eastings)):
-        dx = eastings[i] - eastings[i-1]
-        dy = northings[i] - northings[i-1]
-        distance = np.sqrt(dx**2 + dy**2)
-        distances.append(distances[-1] + distance)
-
-    # Extract elevation data for the cross-section (exaggerated for plotting)
-    ground_levels = section_df['Ground Level'].values * z_scale
-    layer1_depths = section_df['Layer1 Depth'].values * z_scale
-    layer2_depths = section_df['Layer2 Depth'].values * z_scale
-    layer3_depths = section_df['Layer3 Depth'].values * z_scale
-    actual_ground_levels = section_df['Ground Level'].values
-
-    # Create Plotly figure
-    fig = go.Figure()
-
-    # Track plotted layer types for the legend
-    plotted_layer_types = set()
-
-    # Plot each layer as a filled shape
-    for i in range(len(section_df)):
-        x = distances[i]
-        gl = ground_levels[i]
-        l1 = layer1_depths[i] if pd.notna(layer1_depths[i]) else gl
-        l2 = layer2_depths[i] if pd.notna(layer2_depths[i]) else l1
-        l3 = layer3_depths[i] if pd.notna(layer3_depths[i]) else l2
-
-        # Determine the deepest depth for the borehole representation
-        deepest_depth = gl
-        if pd.notna(layer1_depths[i]):
-            deepest_depth = l1
-        if pd.notna(layer2_depths[i]):
-            deepest_depth = l2
-        if pd.notna(layer3_depths[i]):
-            deepest_depth = l3
-
-        # Add borehole as a vertical rectangle (using Plotly shapes)
-        rect_width = 1.5
-        fig.add_shape(
-            type="rect",
-            x0=x - rect_width/2,
-            x1=x + rect_width/2,
-            y0=deepest_depth,
-            y1=gl,
-            fillcolor="#D3D3D3",
-            line=dict(color="black", width=1.5),
-            opacity=0.8,
-            layer="below"
-        )
-
-        # Ground to Layer 1
-        if pd.notna(layer1_depths[i]):
-            layer_type = section_df.iloc[i]['Layer1 Type']
-            color = color_map.get(layer_type, 'grey')
-            if i < len(section_df) - 1:
-                next_x = distances[i + 1]
-                next_gl = ground_levels[i + 1]
-                next_l1 = layer1_depths[i + 1] if pd.notna(layer1_depths[i + 1]) else next_gl
-                # Add filled shape for the layer
-                fig.add_trace(go.Scatter(
-                    x=[x, x, next_x, next_x, x],
-                    y=[gl, l1, next_l1, next_gl, gl],
-                    fill="toself",
-                    fillcolor=color,
-                    line=dict(color="black", width=1),
-                    opacity=0.7,
-                    name=layer_type if layer_type not in plotted_layer_types else None,
-                    showlegend=layer_type not in plotted_layer_types
-                ))
-                plotted_layer_types.add(layer_type)
-
-        # Layer 1 to Layer 2
-        if pd.notna(layer2_depths[i]):
-            layer_type = section_df.iloc[i]['Layer2 Type']
-            color = color_map.get(layer_type, 'grey')
-            if i < len(section_df) - 1:
-                next_x = distances[i + 1]
-                next_l1 = layer1_depths[i + 1] if pd.notna(layer1_depths[i + 1]) else ground_levels[i + 1]
-                next_l2 = layer2_depths[i + 1] if pd.notna(layer2_depths[i + 1]) else next_l1
-                fig.add_trace(go.Scatter(
-                    x=[x, x, next_x, next_x, x],
-                    y=[l1, l2, next_l2, next_l1, l1],
-                    fill="toself",
-                    fillcolor=color,
-                    line=dict(color="black", width=1),
-                    opacity=0.7,
-                    name=layer_type if layer_type not in plotted_layer_types else None,
-                    showlegend=layer_type not in plotted_layer_types
-                ))
-                plotted_layer_types.add(layer_type)
-
-        # Layer 2 to Layer 3
-        if pd.notna(layer3_depths[i]):
-            layer_type = section_df.iloc[i]['Layer3 Type']
-            color = color_map.get(layer_type, 'grey')
-            if i < len(section_df) - 1:
-                next_x = distances[i + 1]
-                next_l2 = layer2_depths[i + 1] if pd.notna(layer2_depths[i + 1]) else layer1_depths[i + 1]
-                next_l3 = layer3_depths[i + 1] if pd.notna(layer3_depths[i + 1]) else next_l2
-                fig.add_trace(go.Scatter(
-                    x=[x, x, next_x, next_x, x],
-                    y=[l2, l3, next_l3, next_l2, l2],
-                    fill="toself",
-                    fillcolor=color,
-                    line=dict(color="black", width=1),
-                    opacity=0.7,
-                    name=layer_type if layer_type not in plotted_layer_types else None,
-                    showlegend=layer_type not in plotted_layer_types
-                ))
-                plotted_layer_types.add(layer_type)
-
-        # Add borehole label with actual elevation
-        bhid = section_df.iloc[i]['BHID']
-        actual_elev = section_df.iloc[i]['Ground Level']
-        fig.add_trace(go.Scatter(
-            x=[x],
-            y=[gl],
-            mode="text",
-            text=[f"{bhid}<br>Elev: {actual_elev:.2f}"],
-            textposition="top center",
-            textfont=dict(size=10, color="black"),
-            showlegend=False
-        ))
-
-    # Plot the ground surface line
-    fig.add_trace(go.Scatter(
-        x=distances,
-        y=ground_levels,
-        mode="lines",
-        line=dict(color="black", width=2),
-        name="Ground Surface"
-    ))
-
-    # Determine Y-axis range to ensure depth increases downward
-    y_min = min(ground_levels.min(), layer1_depths.min(), layer2_depths.min(), layer3_depths.min())
-    y_max = max(ground_levels.max(), layer1_depths.max(), layer2_depths.max(), layer3_depths.max())
-
-    # Update layout for better visualization
-    fig.update_layout(
-        title="2D Cross-Section of Selected Boreholes",
-        xaxis_title="Distance Along Section (units)",
-        yaxis_title="Depth (exaggerated)",
-        yaxis=dict(
-            #range=[y_max, y_min],  # Manually set range to reverse the axis
-            gridcolor="rgba(0,0,0,0.2)",
-            zeroline=False
-        ),
-        showlegend=True,
-        legend=dict(
-            x=0,
-            y=1,
-            bgcolor="rgba(50, 50, 50, 0.9)",
-            font=dict(size=14, color="white"),
-            bordercolor="black",
-            borderwidth=1
-        ),
-        width=1200,
-        height=600,
-        margin=dict(l=50, r=50, b=50, t=50),
-        plot_bgcolor="#F5F5F5",
-        paper_bgcolor="black",
-        xaxis=dict(gridcolor="rgba(0,0,0,0.2)", zeroline=False)
-    )
-
-    return fig
-
-# Streamlit App
-# Option Buttons for 3D Visualizations
-st.header("3D Visualizations")
-
-# Get list of available surfaces for toggling
-available_surfaces = list(surfaces.keys())
-# Add "All" option to the list of surfaces
-surface_options = ["All"] + available_surfaces
-
-# Add a multi-select dropdown for selecting surfaces (for view modes 2 and 3)
-st.subheader("Select Surfaces to Display (for Borelogs with Surfaces and Only Surfaces)")
-selected_surface_options = st.multiselect(
-    "Choose surfaces to display",
-    options=surface_options,
-    default=["All"],
-    help="Select 'All' to display all surfaces, or choose specific surfaces to display."
-)
-
-# Determine which surfaces to plot based on selection
-if "All" in selected_surface_options:
-    surfaces_to_plot = available_surfaces
-else:
-    surfaces_to_plot = [s for s in selected_surface_options if s in available_surfaces]
-
-col1, col2, col3 = st.columns(3)
-
-with col1:
-    if st.button("1) Only Borelogs"):
-        fig = plot_3d_visualization(1)  # View mode 1 doesn't need surface selection
-        if fig:
-            chart = st.plotly_chart(fig, use_container_width=True)
-            st.markdown(
-                """
-                <script>
-                document.querySelector('iframe').contentWindow.document.querySelector('.modebar-btn[data-title="Toggle Fullscreen"]').click();
-                </script>
-                """,
-                unsafe_allow_html=True
-            )
-
-with col2:
-    if st.button("2) Borelogs with Surfaces"):
-        if not surfaces_to_plot:
-            st.warning("Please select at least one surface to display.")
-        else:
-            fig = plot_3d_visualization(2, selected_surfaces=surfaces_to_plot)
-            if fig:
-                chart = st.plotly_chart(fig, use_container_width=True)
-                st.markdown(
-                    """
-                    <script>
-                    document.querySelector('iframe').contentWindow.document.querySelector('.modebar-btn[data-title="Toggle Fullscreen"]').click();
-                    </script>
-                    """,
-                    unsafe_allow_html=True
-                )
-
-with col3:
-    if st.button("3) Only Surfaces"):
-        if not surfaces_to_plot:
-            st.warning("Please select at least one surface to display.")
-        else:
-            fig = plot_3d_visualization(3, selected_surfaces=surfaces_to_plot)
-            if fig:
-                chart = st.plotly_chart(fig, use_container_width=True)
-                st.markdown(
-                    """
-                    <script>
-                    document.querySelector('iframe').contentWindow.document.querySelector('.modebar-btn[data-title="Toggle Fullscreen"]').click();
-                    </script>
-                    """,
-                    unsafe_allow_html=True
-                )
-
-# 2D Cross-Section with Checklist
-st.header("2D Cross-Section")
-st.subheader("Select Boreholes for 2D Cross-Section (at least 2)")
-
-# Checklist for BHIDs
-available_bhids = df['BHID'].tolist()
-selected_bhids = st.multiselect("Select Boreholes", available_bhids)
-
-if st.button("Generate 2D Cross-Section"):
-    if len(selected_bhids) >= 2:
-        fig = plot_2d_cross_section(selected_bhids)
-        if fig:
-            st.plotly_chart(fig, use_container_width=True)
-    else:
-        st.error("Please select at least 2 boreholes for the cross-section.")
+st.plotly_chart(fig, use_container_width=True)
+fig.write_html("borelog_model.html", include_plotlyjs="cdn")
+st.success("Model generated & saved as borelog_model.html")
