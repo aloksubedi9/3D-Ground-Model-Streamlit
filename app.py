@@ -6,26 +6,43 @@ from scipy.spatial import ConvexHull
 import plotly.graph_objects as go
 from matplotlib import cm
 
+st.set_page_config(layout="wide")
 st.title("Interactive 3D Ground Surface with Borehole Logs")
 
-# ===== Update these paths if your CSV files have different names/locations =====
-surface_csv_path = r'CB1.csv'                  # Surface points
-borehole_csv_path = r'boreholes.csv'           # Borehole locations
-bh_details_csv_path = r'BHdetails2.csv'         # Borehole stratigraphy
+st.markdown("""
+Upload your three CSV files below. Required columns:
+- **Surface CSV**: `Easting`, `Northing`, `Elevation`
+- **Boreholes CSV**: `BH ID`, `Easting`, `Northing`
+- **BH Details CSV**: `BH`, `FROM`, `TO`, `SOIL TYPE`
+""")
 
-# ===== 1. Read CSVs =====
-df_surface = pd.read_csv(surface_csv_path)
-df_boreholes = pd.read_csv(borehole_csv_path)
-df_bh_details = pd.read_csv(bh_details_csv_path)
+col1, col2, col3 = st.columns(3)
 
-# Column checks
+with col1:
+    surface_file = st.file_uploader("Upload Surface CSV (ground points)", type="csv")
+with col2:
+    boreholes_file = st.file_uploader("Upload Boreholes CSV (locations)", type="csv")
+with col3:
+    bh_details_file = st.file_uploader("Upload Borehole Details CSV (stratigraphy)", type="csv")
+
+if not (surface_file and boreholes_file and bh_details_file):
+    st.info("Please upload all three CSV files to continue.")
+    st.stop()
+
+# Read uploaded files
+df_surface = pd.read_csv(surface_file)
+df_boreholes = pd.read_csv(boreholes_file)
+df_bh_details = pd.read_csv(bh_details_file)
+
+# Column validation
 for df, cols, name in [
     (df_surface, ['Easting', 'Northing', 'Elevation'], "Surface CSV"),
     (df_boreholes, ['BH ID', 'Easting', 'Northing'], "Boreholes CSV"),
     (df_bh_details, ['BH', 'FROM', 'TO', 'SOIL TYPE'], "BH Details CSV")
 ]:
-    if not all(col in df.columns for col in cols):
-        st.error(f"{name} must contain columns: {cols}")
+    missing = [c for c in cols if c not in df.columns]
+    if missing:
+        st.error(f"{name} is missing columns: {missing}")
         st.stop()
 
 # Extract data
@@ -37,10 +54,10 @@ bh_ids = df_boreholes['BH ID'].values
 bh_easting = df_boreholes['Easting'].values
 bh_northing = df_boreholes['Northing'].values
 
-# ===== Get unique soil types actually present =====
+# Unique soil types present in the data
 present_soil_types = df_bh_details['SOIL TYPE'].dropna().unique().tolist()
 
-# ===== Predefined colors =====
+# Predefined colors (add more if needed)
 predefined_soil_color_map = {
     'SM-ML': 'rgb(255,255,0)', 'SC': 'rgb(210,180,140)', 'CI': 'rgb(0,128,0)',
     'SM/SM-ML': 'rgb(255,215,0)', 'ROCK': 'rgb(139,69,19)', 'SM': 'rgb(255,255,224)',
@@ -49,15 +66,17 @@ predefined_soil_color_map = {
     'ML': 'rgb(255,228,181)', 'SP': 'rgb(255,222,173)', 'CHAR': 'rgb(47,79,79)'
 }
 
-# Build color map only for present types
+# Build color map only for present soil types
 soil_color_map = {}
 for soil_type in present_soil_types:
-    soil_color_map[soil_type] = predefined_soil_color_map.get(soil_type, 'rgb(0,0,0)')
-    if soil_type not in predefined_soil_color_map:
+    if soil_type in predefined_soil_color_map:
+        soil_color_map[soil_type] = predefined_soil_color_map[soil_type]
+    else:
         st.warning(f"Soil type '{soil_type}' not predefined – using black.")
+        soil_color_map[soil_type] = 'rgb(0,0,0)'
 
-# ===== Grid & exaggeration settings =====
-h_exaggeration = 2
+# Settings
+h_exaggeration = 2.0
 ve_factor = 1.0
 grid_resolution = 100
 
@@ -67,13 +86,14 @@ northing_scaled = northing * h_exaggeration
 bh_easting_scaled = bh_easting * h_exaggeration
 bh_northing_scaled = bh_northing * h_exaggeration
 
-# Grid
+# Grid creation
 x_min, x_max = easting_scaled.min(), easting_scaled.max()
 y_min, y_max = northing_scaled.min(), northing_scaled.max()
-buffer_x = (x_max - x_min) * 0.05
-buffer_y = (y_max - y_min) * 0.05
-grid_x, grid_y = np.mgrid[x_min-buffer_x:x_max+buffer_x:grid_resolution*1j,
-                          y_min-buffer_y:y_max+buffer_y:grid_resolution*1j]
+buffer = 0.05
+grid_x, grid_y = np.mgrid[
+    x_min - buffer*(x_max-x_min): x_max + buffer*(x_max-x_min): grid_resolution*1j,
+    y_min - buffer*(y_max-y_min): y_max + buffer*(y_max-y_min): grid_resolution*1j
+]
 
 grid_z = griddata((easting_scaled, northing_scaled), elevation, (grid_x, grid_y),
                   method='linear', fill_value=np.nanmean(elevation))
@@ -81,13 +101,12 @@ grid_z = griddata((easting_scaled, northing_scaled), elevation, (grid_x, grid_y)
 mean_z = np.nanmean(grid_z)
 grid_z = (grid_z - mean_z) * ve_factor + mean_z
 
-# Borehole surface elevations
+# Borehole elevations
 bh_z = griddata((easting_scaled, northing_scaled), elevation,
                 (bh_easting_scaled, bh_northing_scaled), method='linear')
 bh_z = (bh_z - mean_z) * ve_factor + mean_z
 
-bh_coord_map = dict(zip(df_boreholes['BH ID'],
-                        zip(bh_easting_scaled, bh_northing_scaled, bh_z)))
+bh_coord_map = dict(zip(df_boreholes['BH ID'], zip(bh_easting_scaled, bh_northing_scaled, bh_z)))
 
 # Convex hull mask
 points = np.vstack((easting_scaled, northing_scaled)).T
@@ -96,11 +115,11 @@ hull = ConvexHull(points)
 def point_in_hull(p, h, tol=1e-12):
     return all(np.dot(eq[:-1], p) + eq[-1] <= tol for eq in h.equations)
 
-mask = np.array([[point_in_hull([grid_x[i,j], grid_y[i,j]], hull)
-                  for j in range(grid_x.shape[1])] for i in range(grid_x.shape[0])])
+mask = np.vectorize(lambda i, j: point_in_hull([grid_x[i,j], grid_y[i,j]], hull))( 
+    *np.indices(grid_x.shape) )
 grid_z_valid = np.ma.masked_where(~mask, grid_z)
 
-# Colorscale
+# Surface colorscale
 cmap = cm.turbo
 steps = 20
 colorscale = [[i/(steps-1), f'rgb({int(c[0]*255)},{int(c[1]*255)},{int(c[2]*255)})']
@@ -111,7 +130,7 @@ max_depth = df_bh_details['TO'].max() * ve_factor
 z_min = min(np.nanmin(grid_z), np.nanmin(bh_z) - max_depth * 1.1)
 z_max = np.nanmax(grid_z) * 1.1
 
-# Figure
+# Plotly figure
 fig = go.Figure()
 
 fig.add_trace(go.Surface(x=grid_x, y=grid_y, z=grid_z_valid,
@@ -125,12 +144,12 @@ fig.add_trace(go.Scatter3d(x=bh_easting_scaled, y=bh_northing_scaled, z=bh_z + 0
 
 # BH labels
 for i, bh_id in enumerate(bh_ids):
-    fig.add_trace(go.Scatter3d(x=[bh_easting_scaled[i]], y=[bh_northing_scaled[i]], z=[bh_z[i]],
-                               mode='text', text=[bh_id],
-                               textfont=dict(size=26, color='black'),
+    fig.add_trace(go.Scatter3d(x=[bh_easting_scaled[i]], y=[bh_northing_scaled[i]], z=[bh_z[i] + 1],
+                               mode='text', text=str(bh_id),
+                               textfont=dict(size=20, color='black'),
                                showlegend=False))
 
-# Legend entries (only present soils)
+# Legend: only present soil types
 for soil_type, color in soil_color_map.items():
     fig.add_trace(go.Scatter3d(x=[None], y=[None], z=[None],
                                mode='lines', line=dict(color=color, width=20),
@@ -139,6 +158,7 @@ for soil_type, color in soil_color_map.items():
 # Borehole logs
 for bh_id, group in df_bh_details.groupby('BH'):
     if bh_id not in bh_coord_map:
+        st.warning(f"Borehole {bh_id} missing coordinates – skipped.")
         continue
     x, y, surface_z = bh_coord_map[bh_id]
     for _, row in group.iterrows():
@@ -149,12 +169,16 @@ for bh_id, group in df_bh_details.groupby('BH'):
                                    line=dict(color=soil_color_map.get(row['SOIL TYPE'], 'rgb(0,0,0)'), width=20),
                                    showlegend=False))
 
-fig.update_layout(title=f"3D Ground Model (H×{h_exaggeration}, V×{ve_factor})",
-                  scene=dict(xaxis_title='Easting', yaxis_title='Northing',
-                             zaxis_title='Elevation', zaxis=dict(range=[z_min, z_max]),
-                             aspectratio=dict(x=h_exaggeration, y=h_exaggeration, z=1)),
-                  legend=dict(x=0, y=0.5, title='Soil Types & Boreholes'))
+fig.update_layout(
+    title=f"3D Ground Model (Horizontal ×{h_exaggeration}, Vertical ×{ve_factor})",
+    scene=dict(
+        xaxis_title='Easting', yaxis_title='Northing', zaxis_title='Elevation (m)',
+        zaxis=dict(range=[z_min, z_max]),
+        aspectratio=dict(x=h_exaggeration, y=h_exaggeration, z=1)
+    ),
+    legend=dict(x=0, y=0.5, title="Soil Types & Boreholes")
+)
 
 st.plotly_chart(fig, use_container_width=True)
 fig.write_html("borelog_model.html", include_plotlyjs="cdn")
-st.success("Model generated & saved as borelog_model.html")
+st.success("Model generated! Download 'borelog_model.html' from your browser if needed.")
